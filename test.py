@@ -4,8 +4,8 @@ from typing import Dict, List
 
 class Trader:
     POSITION_LIMITS = {
-        "EMERALDS": 80,
-        "TOMATOES": 80,
+        "EMERALDS": 20,
+        "TOMATOES": 20,
     }
 
     def bid(self):
@@ -13,7 +13,6 @@ class Trader:
 
     def get_alpha(self, position: int) -> float:
         abs_pos = abs(position)
-
         if abs_pos < 20:
             return 0.05
         elif abs_pos < 50:
@@ -44,17 +43,24 @@ class Trader:
             current_position = state.position.get(product, 0)
             position_limit = self.POSITION_LIMITS.get(product, 20)
 
-            fair_old = 10000
+            if product == "EMERALDS":
+                fair_old = 10000
+            else:
+                result[product] = orders
+                continue
+
             alpha = self.get_alpha(current_position)
             fair_new = fair_old - alpha * current_position
 
-            if best_ask < fair_new:
+            edge = 1
+
+            if best_ask < fair_new - edge:
                 max_buy = position_limit - current_position
                 buy_volume = min(-best_ask_volume, max_buy)
                 if buy_volume > 0:
                     orders.append(Order(product, best_ask, buy_volume))
 
-            if best_bid > fair_new:
+            if best_bid > fair_new + edge:
                 max_sell = position_limit + current_position
                 sell_volume = min(best_bid_volume, max_sell)
                 if sell_volume > 0:
