@@ -94,11 +94,11 @@ class Trader:
             sell_qty = min(base_size, max_sell)
 
             # 6. 仓位控制
-            if current_position > 60:
+            if current_position > 80:
                 if sell_qty > 0:
                     orders.append(Order(product, my_ask, -sell_qty))
 
-            elif current_position < -60:
+            elif current_position < -80:
                 if buy_qty > 0:
                     orders.append(Order(product, my_bid, buy_qty))
 
