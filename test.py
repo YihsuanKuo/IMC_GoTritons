@@ -61,7 +61,11 @@ class Trader:
 
             # ---------------- EMERALDS ----------------
             if product == "EMERALDS":
-                fair_price = 10000 - alpha * current_position
+                prev_mid = saved_data.get("EMERALDS", mid_price)
+
+                fair_price = (
+                    0.6 * prev_mid + 0.4 * mid_price - alpha * current_position
+                )
 
                 buy_quote = int(fair_price - 1)
                 sell_quote = int(fair_price + 1)
