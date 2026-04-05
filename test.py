@@ -27,8 +27,6 @@ class Trader:
 
     def run(self, state: TradingState):
         result: Dict[str, List[Order]] = {}
-        gmma = 0.5
-
         if state.traderData:
             try:
                 saved_data = json.loads(state.traderData)
@@ -68,9 +66,12 @@ class Trader:
             # ---------------- EMERALDS ----------------
             if product == "EMERALDS":
                 self.price_history["EMERALDS"].append(mid_price)
-                volatility = np.mean(np.diff(self.price_history["EMERALDS"]))
+                if len(self.price_history["EMERALDS"]) > 10:
+                    volatility = np.mean(np.diff(self.price_history["EMERALDS"][-10:]))
+                else:
+                    volatility = np.mean(np.diff(self.price_history["EMERALDS"]))
                 base_width = alpha * current_position
-                width = base_width + gmma * volatility
+                width = base_width + 0.3 * volatility
 
                 spread = best_ask - best_bid
 
@@ -93,9 +94,12 @@ class Trader:
             # ---------------- TOMATOES ----------------
             elif product == "TOMATOES":
                 self.price_history["TOMATOES"].append(mid_price)
-                volatility = np.mean(np.diff(self.price_history["TOMATOES"]))
+                if len(self.price_history["TOMATOES"]) > 10:
+                    volatility = np.mean(np.diff(self.price_history["TOMATOES"][-10:]))
+                else:
+                    volatility = np.mean(np.diff(self.price_history["TOMATOES"]))
                 base_width = alpha * current_position
-                width = base_width + gmma * volatility
+                width = base_width + 1.0 * volatility
 
                 ask_price = mid_price + width
                 bid_price = mid_price - width
