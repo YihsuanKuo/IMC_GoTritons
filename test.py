@@ -6,7 +6,7 @@ import json
 class Trader:
     POSITION_LIMITS = {
         "EMERALDS": 80,
-        "TOMATOES": 80,
+        "TOMATOES": 20,
     }
 
     def bid(self):
@@ -51,7 +51,6 @@ class Trader:
             best_ask_volume = order_depth.sell_orders[best_ask]
 
             mid_price = (best_bid + best_ask) / 2
-            new_data[product] = mid_price
 
             current_position = state.position.get(product, 0)
             limit = self.POSITION_LIMITS.get(product, 20)
@@ -64,57 +63,60 @@ class Trader:
             if product == "EMERALDS":
                 fair_price = 10000 - alpha * current_position
 
-                spread = best_ask - best_bid
-
-                # step inside the spread to improve fill probability
-                if spread >= 2:
-                    buy_quote = min(best_bid + 1, int(fair_price))
-                    sell_quote = max(best_ask - 1, int(fair_price))
-                else:
-                    buy_quote = best_bid
-                    sell_quote = best_ask
+                buy_quote = int(fair_price - 1)
+                sell_quote = int(fair_price + 1)
 
                 if max_buy > 0:
-                    orders.append(Order(product, buy_quote, min(15, max_buy)))
+                    orders.append(Order(product, buy_quote, min(10, max_buy)))
 
                 if max_sell > 0:
                     orders.append(
-                        Order(product, sell_quote, -min(15, max_sell))
+                        Order(product, sell_quote, -min(10, max_sell))
                     )
 
             # ---------------- TOMATOES ----------------
             elif product == "TOMATOES":
-                prev_mid = saved_data.get("TOMATOES", mid_price)
+                prev_ema = saved_data.get("TOMATOES_ema", mid_price)
+                prev_mid = saved_data.get("TOMATOES_prev_mid", mid_price)
 
-                fair_price = (
-                    0.6 * prev_mid + 0.4 * mid_price - alpha * current_position
-                )
+                lam = 0.2
+                ema_price = lam * mid_price + (1 - lam) * prev_ema
 
-                # smaller threshold => more aggressive trading
-                edge = 0
+                volatility = abs(mid_price - prev_mid)
 
-                # aggressive order taking
-                if best_ask <= fair_price - edge:
-                    buy_volume = min(-best_ask_volume, max_buy)
+                fair_price = ema_price - alpha * current_position
+
+                # stricter edge to improve trade quality
+                edge = 1.0
+
+                # volatility-adjusted width
+                base_width = 1.0
+                gamma = 0.3
+                width = base_width + gamma * volatility
+
+                # aggressive taking only when clearly favorable
+                if best_ask < fair_price - edge and max_buy > 0:
+                    buy_volume = min(-best_ask_volume, max_buy, 5)
                     if buy_volume > 0:
                         orders.append(Order(product, best_ask, buy_volume))
 
-                if best_bid >= fair_price + edge:
-                    sell_volume = min(best_bid_volume, max_sell)
+                if best_bid > fair_price + edge and max_sell > 0:
+                    sell_volume = min(best_bid_volume, max_sell, 5)
                     if sell_volume > 0:
                         orders.append(Order(product, best_bid, -sell_volume))
 
-                # tighter passive quotes
-                passive_buy = min(best_bid + 1, int(fair_price))
-                passive_sell = max(best_ask - 1, int(fair_price))
+                # small passive quotes
+                bid_quote = int(fair_price - width)
+                ask_quote = int(fair_price + width)
 
                 if max_buy > 0:
-                    orders.append(Order(product, passive_buy, min(8, max_buy)))
+                    orders.append(Order(product, bid_quote, min(3, max_buy)))
 
                 if max_sell > 0:
-                    orders.append(
-                        Order(product, passive_sell, -min(8, max_sell))
-                    )
+                    orders.append(Order(product, ask_quote, -min(3, max_sell)))
+
+                new_data["TOMATOES_ema"] = ema_price
+                new_data["TOMATOES_prev_mid"] = mid_price
 
             result[product] = orders
 
