@@ -1,13 +1,17 @@
 from datamodel import OrderDepth, TradingState, Order
 from typing import Dict, List
 import json
+import numpy as np
 
 
 class Trader:
     POSITION_LIMITS = {
         "EMERALDS": 80,
-        "TOMATOES": 20,
+        "TOMATOES": 80,
     }
+
+    def __init__(self):
+        self.price_history = {"EMERALDS": [], "TOMATOES": []}
 
     def bid(self):
         return 15
@@ -23,6 +27,7 @@ class Trader:
 
     def run(self, state: TradingState):
         result: Dict[str, List[Order]] = {}
+        gmma = 0.5
 
         if state.traderData:
             try:
@@ -51,6 +56,7 @@ class Trader:
             best_ask_volume = order_depth.sell_orders[best_ask]
 
             mid_price = (best_bid + best_ask) / 2
+            new_data[product] = mid_price
 
             current_position = state.position.get(product, 0)
             limit = self.POSITION_LIMITS.get(product, 20)
@@ -59,68 +65,55 @@ class Trader:
             max_buy = limit - current_position
             max_sell = limit + current_position
 
-            # ---------------- EMERALDS ----------------
             if product == "EMERALDS":
-                prev_mid = saved_data.get("EMERALDS", mid_price)
+                self.price_history["EMERALDS"].append(mid_price)
+                volatility = np.mean(np.diff(self.price_history["EMERALDS"]))
+                base_width = alpha * current_position
+                width = base_width + gmma * volatility
 
-                fair_price = (
-                    0.6 * prev_mid + 0.4 * mid_price - alpha * current_position
-                )
+                spread = best_ask - best_bid
 
-                buy_quote = int(fair_price - 1)
-                sell_quote = int(fair_price + 1)
+                if spread >= 2:
+                    buy_quote = min(best_bid + 1, int(mid_price - width))
+                    sell_quote = max(best_ask - 1, int(mid_price + width))
+                else:
+                    buy_quote = best_bid
+                    sell_quote = best_ask
 
                 if max_buy > 0:
-                    orders.append(Order(product, buy_quote, min(10, max_buy)))
+                    orders.append(Order(product, buy_quote, min(15, max_buy)))
 
                 if max_sell > 0:
-                    orders.append(
-                        Order(product, sell_quote, -min(10, max_sell))
-                    )
+                    orders.append(Order(product, sell_quote, -min(15, max_sell)))
 
-            # ---------------- TOMATOES ----------------
             elif product == "TOMATOES":
-                prev_ema = saved_data.get("TOMATOES_ema", mid_price)
-                prev_mid = saved_data.get("TOMATOES_prev_mid", mid_price)
+                self.price_history["TOMATOES"].append(mid_price)
+                volatility = np.mean(np.diff(self.price_history["TOMATOES"]))
+                base_width = alpha * current_position
+                width = base_width + gmma * volatility
 
-                lam = 0.2
-                ema_price = lam * mid_price + (1 - lam) * prev_ema
+                ask_price = mid_price + width
+                bid_price = mid_price - width
+                edge = 0
 
-                volatility = abs(mid_price - prev_mid)
-
-                fair_price = ema_price - alpha * current_position
-
-                # stricter edge to improve trade quality
-                edge = 1.0
-
-                # volatility-adjusted width
-                base_width = 1.0
-                gamma = 0.3
-                width = base_width + gamma * volatility
-
-                # aggressive taking only when clearly favorable
-                if best_ask < fair_price - edge and max_buy > 0:
-                    buy_volume = min(-best_ask_volume, max_buy, 5)
+                if best_ask <= ask_price - edge:
+                    buy_volume = min(-best_ask_volume, max_buy)
                     if buy_volume > 0:
                         orders.append(Order(product, best_ask, buy_volume))
 
-                if best_bid > fair_price + edge and max_sell > 0:
-                    sell_volume = min(best_bid_volume, max_sell, 5)
+                if best_bid >= bid_price + edge:
+                    sell_volume = min(best_bid_volume, max_sell)
                     if sell_volume > 0:
                         orders.append(Order(product, best_bid, -sell_volume))
 
-                # small passive quotes
-                bid_quote = int(fair_price - width)
-                ask_quote = int(fair_price + width)
+                passive_buy = min(best_bid + 1, int(bid_price))
+                passive_sell = max(best_ask - 1, int(ask_price))
 
                 if max_buy > 0:
-                    orders.append(Order(product, bid_quote, min(3, max_buy)))
+                    orders.append(Order(product, passive_buy, min(8, max_buy)))
 
                 if max_sell > 0:
-                    orders.append(Order(product, ask_quote, -min(3, max_sell)))
-
-                new_data["TOMATOES_ema"] = ema_price
-                new_data["TOMATOES_prev_mid"] = mid_price
+                    orders.append(Order(product, passive_sell, -min(8, max_sell)))
 
             result[product] = orders
 
