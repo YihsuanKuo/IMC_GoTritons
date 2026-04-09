@@ -127,8 +127,10 @@ class ReplayBacktester:
             row[f'mid_{symbol}'] = mids.get(symbol)
         self.equity_rows.append(row)
 
-    def run(self) -> BacktestResult:
+    def run(self, max_steps: int | None = None) -> BacktestResult:
         snapshots = list(self.data.iter_snapshots())
+        # if max_steps is not None:
+        #     snapshots = snapshots[:max_steps]
         listings = {p: {'symbol': p} for p in self.data.products}
 
         for i, snap in enumerate(snapshots):
