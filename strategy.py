@@ -1,4 +1,4 @@
-from backtester.datamodel import OrderDepth, TradingState, Order
+from datamodel import OrderDepth, TradingState, Order
 from typing import Dict, List
 import json
 
@@ -9,7 +9,7 @@ class Trader:
         "TOMATOES": 80,
     }
 
-    def __init__(self, lam:list, alpha:list):
+    def __init__(self, lam=[0.8, 0.8], alpha=[0.1, 0.05]):
         self.er_lam = lam[0]
         self.tom_lam = lam[1]
         self.er_alpha = alpha[0]
