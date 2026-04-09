@@ -9,6 +9,12 @@ class Trader:
         "TOMATOES": 80,
     }
 
+    def __init__(self, lam:list, alpha:list):
+        self.er_lam = lam[0]
+        self.tom_lam = lam[1]
+        self.er_alpha = alpha[0]
+        self.tom_alpha = alpha[1]
+
     def bid(self):
         return 15
 
@@ -65,7 +71,7 @@ class Trader:
                 prev_mid = saved_data.get("EMERALDS", mid_price)
 
                 fair_price = (
-                    0.6 * prev_mid + 0.4 * mid_price - alpha * current_position
+                    self.er_lam * prev_mid + (1 - self.er_lam) * mid_price - self.er_alpha * current_position
                 )
 
                 spread = best_ask - best_bid
@@ -91,7 +97,7 @@ class Trader:
                 prev_mid = saved_data.get("TOMATOES", mid_price)
 
                 fair_price = (
-                    0.6 * prev_mid + 0.4 * mid_price - alpha * current_position
+                    self.tom_lam * prev_mid + (1 - self.tom_lam) * mid_price - self.tom_alpha * current_position
                 )
 
                 # smaller threshold => more aggressive trading

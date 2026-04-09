@@ -46,10 +46,16 @@ def main() -> None:
         default="backtest_output",
         help="Directory for CSV outputs.",
     )
+    parser.add_argument(
+        "--max-steps",
+        type=int,
+        help="Maximum number of steps to run the backtest.",
+    )
+
     args = parser.parse_args()
 
     trader = load_trader(args.strategy)
-    data = HistoricalData(args.prices, args.trades)
+    data = HistoricalData(args.prices, args.trades, max_rows=args.max_steps)
     engine = ReplayBacktester(data, trader)
     result = engine.run()
 
