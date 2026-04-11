@@ -9,7 +9,7 @@ class Trader:
         "TOMATOES": 80,
     }
 
-    def __init__(self, lam=[0.8, 0.8], alpha=[0.1, 0.05]):
+    def __init__(self, lam=[0.5, 0.85], alpha=[0.1, 0.05]):
         self.er_lam = lam[0]
         self.tom_lam = lam[1]
         self.er_alpha = alpha[0]
