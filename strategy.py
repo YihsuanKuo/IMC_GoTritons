@@ -1,4 +1,4 @@
-from datamodel import OrderDepth, TradingState, Order
+from backtester.datamodel import OrderDepth, TradingState, Order
 from typing import Dict, List
 import json
 
@@ -9,7 +9,7 @@ class Trader:
         "TOMATOES": 80,
     }
 
-    def __init__(self, lam=[0.8, 0.8], alpha=[0.1, 0.05]):
+    def __init__(self, lam=[0.6, 0.6], alpha=[None, None]):
         self.er_lam = lam[0]
         self.tom_lam = lam[1]
         self.er_alpha = alpha[0]
@@ -61,7 +61,6 @@ class Trader:
 
             current_position = state.position.get(product, 0)
             limit = self.POSITION_LIMITS.get(product, 20)
-            alpha = self.get_alpha(current_position)
 
             max_buy = limit - current_position
             max_sell = limit + current_position
@@ -69,6 +68,9 @@ class Trader:
             # ---------------- EMERALDS ----------------
             if product == "EMERALDS":
                 prev_mid = saved_data.get("EMERALDS", mid_price)
+                
+                if self.er_alpha is None:
+                    self.er_alpha = self.get_alpha(current_position)
 
                 fair_price = (
                     self.er_lam * prev_mid + (1 - self.er_lam) * mid_price - self.er_alpha * current_position
@@ -95,6 +97,9 @@ class Trader:
             # ---------------- TOMATOES ----------------
             elif product == "TOMATOES":
                 prev_mid = saved_data.get("TOMATOES", mid_price)
+
+                if self.tom_alpha is None:
+                    self.tom_alpha = self.get_alpha(current_position)
 
                 fair_price = (
                     self.tom_lam * prev_mid + (1 - self.tom_lam) * mid_price - self.tom_alpha * current_position
