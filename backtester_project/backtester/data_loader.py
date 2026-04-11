@@ -17,11 +17,15 @@ class Snapshot:
 
 
 class HistoricalData:
-    def __init__(self, price_path: str | Path, trade_path: str | Path):
+    def __init__(self, price_path: str | Path, trade_path: str | Path, max_rows: int | None = None):
         self.price_path = Path(price_path)
         self.trade_path = Path(trade_path)
         self.prices = pd.read_csv(self.price_path, sep=";")
         self.trades = pd.read_csv(self.trade_path, sep=";")
+
+        if max_rows is not None:
+            self.prices = self.prices.iloc[:2*max_rows]
+            self.trades = self.trades.iloc[:2*max_rows]
 
         self.prices = self.prices.sort_values(
             ["timestamp", "product"]
