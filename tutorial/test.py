@@ -1,4 +1,4 @@
-from backtester.datamodel import OrderDepth, TradingState, Order
+from tutorial.datamodel import OrderDepth, TradingState, Order
 from typing import Dict, List
 import json
 
@@ -65,20 +65,20 @@ class Trader:
             max_buy = limit - current_position
             max_sell = limit + current_position
 
-            # ---------------- EMERALDS ----------------
             if product == "EMERALDS":
                 prev_mid = saved_data.get("EMERALDS", mid_price)
-                
+
                 if self.er_alpha is None:
                     self.er_alpha = self.get_alpha(current_position)
 
                 fair_price = (
-                    self.er_lam * prev_mid + (1 - self.er_lam) * mid_price - self.er_alpha * current_position
+                    self.er_lam * prev_mid
+                    + (1 - self.er_lam) * mid_price
+                    - self.er_alpha * current_position
                 )
 
                 spread = best_ask - best_bid
 
-                # step inside the spread to improve fill probability
                 if spread >= 2:
                     buy_quote = min(best_bid + 1, int(fair_price))
                     sell_quote = max(best_ask - 1, int(fair_price))
@@ -90,11 +90,8 @@ class Trader:
                     orders.append(Order(product, buy_quote, min(15, max_buy)))
 
                 if max_sell > 0:
-                    orders.append(
-                        Order(product, sell_quote, -min(15, max_sell))
-                    )
+                    orders.append(Order(product, sell_quote, -min(15, max_sell)))
 
-            # ---------------- TOMATOES ----------------
             elif product == "TOMATOES":
                 prev_mid = saved_data.get("TOMATOES", mid_price)
 
@@ -102,13 +99,13 @@ class Trader:
                     self.tom_alpha = self.get_alpha(current_position)
 
                 fair_price = (
-                    self.tom_lam * prev_mid + (1 - self.tom_lam) * mid_price - self.tom_alpha * current_position
+                    self.tom_lam * prev_mid
+                    + (1 - self.tom_lam) * mid_price
+                    - self.tom_alpha * current_position
                 )
 
-                # smaller threshold => more aggressive trading
                 edge = 0
 
-                # aggressive order taking
                 if best_ask <= fair_price - edge:
                     buy_volume = min(-best_ask_volume, max_buy)
                     if buy_volume > 0:
@@ -119,7 +116,6 @@ class Trader:
                     if sell_volume > 0:
                         orders.append(Order(product, best_bid, -sell_volume))
 
-                # tighter passive quotes
                 passive_buy = min(best_bid + 1, int(fair_price))
                 passive_sell = max(best_ask - 1, int(fair_price))
 
@@ -127,9 +123,7 @@ class Trader:
                     orders.append(Order(product, passive_buy, min(8, max_buy)))
 
                 if max_sell > 0:
-                    orders.append(
-                        Order(product, passive_sell, -min(8, max_sell))
-                    )
+                    orders.append(Order(product, passive_sell, -min(8, max_sell)))
 
             result[product] = orders
 

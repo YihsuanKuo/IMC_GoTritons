@@ -1,4 +1,4 @@
-from backtester.datamodel import OrderDepth, TradingState, Order
+from tutorial.datamodel import OrderDepth, TradingState, Order
 from typing import Dict, List
 import json
 
@@ -56,7 +56,17 @@ class Trader:
             best_ask = min(order_depth.sell_orders.keys())
             best_ask_volume = order_depth.sell_orders[best_ask]
 
-            mid_price = (best_bid + best_ask) / 2
+            # Volume-weighted average price across all visible order book levels
+            total_value = 0.0
+            total_volume = 0
+            for price, vol in order_depth.buy_orders.items():
+                total_value += price * vol
+                total_volume += vol
+            for price, vol in order_depth.sell_orders.items():
+                total_value += price * abs(vol)
+                total_volume += abs(vol)
+            mid_price = total_value / total_volume if total_volume > 0 else (best_bid + best_ask) / 2
+
             new_data[product] = mid_price
 
             current_position = state.position.get(product, 0)
