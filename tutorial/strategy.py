@@ -1,7 +1,6 @@
-from datamodel import OrderDepth, TradingState, Order
+from tutorial.datamodel import OrderDepth, TradingState, Order
 from typing import Dict, List
 import json
-import numpy as np
 
 
 class Trader:
@@ -9,6 +8,12 @@ class Trader:
         "EMERALDS": 80,
         "TOMATOES": 80,
     }
+
+    def __init__(self, lam=[0.6, 0.6], alpha=[None, None]):
+        self.er_lam = lam[0]
+        self.tom_lam = lam[1]
+        self.er_alpha = alpha[0]
+        self.tom_alpha = alpha[1]
 
     def bid(self):
         return 15
@@ -24,6 +29,7 @@ class Trader:
 
     def run(self, state: TradingState):
         result: Dict[str, List[Order]] = {}
+
         if state.traderData:
             try:
                 saved_data = json.loads(state.traderData)
@@ -35,15 +41,49 @@ class Trader:
         new_data = {}
 
         for product, order_depth in state.order_depths.items():
-            if not order_depth.buy_orders or not order_depth.sell_orders:
-                result[product] = []
+            orders: List[Order] = []
+
+            if (
+                len(order_depth.buy_orders) == 0
+                or len(order_depth.sell_orders) == 0
+            ):
+                result[product] = orders
                 continue
 
+            best_bid = max(order_depth.buy_orders.keys())
+            best_bid_volume = order_depth.buy_orders[best_bid]
+
+            best_ask = min(order_depth.sell_orders.keys())
+            best_ask_volume = order_depth.sell_orders[best_ask]
+
+            # Volume-weighted average price across all visible order book levels
+            total_value = 0.0
+            total_volume = 0
+            for price, vol in order_depth.buy_orders.items():
+                total_value += price * vol
+                total_volume += vol
+            for price, vol in order_depth.sell_orders.items():
+                total_value += price * abs(vol)
+                total_volume += abs(vol)
+            mid_price = total_value / total_volume if total_volume > 0 else (best_bid + best_ask) / 2
+
+            new_data[product] = mid_price
+
+            current_position = state.position.get(product, 0)
+            limit = self.POSITION_LIMITS.get(product, 20)
+
+            max_buy = limit - current_position
+            max_sell = limit + current_position
+
+            # ---------------- EMERALDS ----------------
             if product == "EMERALDS":
                 prev_mid = saved_data.get("EMERALDS", mid_price)
+                
+                if self.er_alpha is None:
+                    self.er_alpha = self.get_alpha(current_position)
 
                 fair_price = (
-                    0.6 * prev_mid + 0.4 * mid_price - alpha * current_position
+                    self.er_lam * prev_mid + (1 - self.er_lam) * mid_price - self.er_alpha * current_position
                 )
 
                 spread = best_ask - best_bid
@@ -68,8 +108,11 @@ class Trader:
             elif product == "TOMATOES":
                 prev_mid = saved_data.get("TOMATOES", mid_price)
 
+                if self.tom_alpha is None:
+                    self.tom_alpha = self.get_alpha(current_position)
+
                 fair_price = (
-                    0.6 * prev_mid + 0.4 * mid_price - alpha * current_position
+                    self.tom_lam * prev_mid + (1 - self.tom_lam) * mid_price - self.tom_alpha * current_position
                 )
 
                 # smaller threshold => more aggressive trading
