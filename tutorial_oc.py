@@ -5,8 +5,8 @@ import json
 
 class Trader:
     POSITION_LIMITS = {
-        "EMERALDS": 80,
-        "TOMATOES": 80,
+        "INTARIAN_PEPPER_ROOT": 80,
+        "ASH_COATED_OSMIUM": 80,
     }
 
     HISTORY_LEN = 6
