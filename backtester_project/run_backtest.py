@@ -115,6 +115,7 @@ def main() -> None:
             df[pos_col],
             linestyle="--",
             label=f"{product} Position",
+            color = "red"
         )
         ax2.set_ylabel("Position")
 
