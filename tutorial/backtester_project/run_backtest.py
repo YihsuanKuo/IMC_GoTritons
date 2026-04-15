@@ -7,8 +7,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 
-from backtester import HistoricalData, ReplayBacktester
-from backtester.reporting import save_outputs, summarize_result
+from tutorial.backtester_project.backtester import HistoricalData, ReplayBacktester
+from tutorial.backtester_project.backtester.reporting import save_outputs, summarize_result
 
 
 def load_trader(strategy_path: str):

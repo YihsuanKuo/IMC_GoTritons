@@ -1,4 +1,8 @@
+<<<<<<< HEAD:backtester_project/strategies/strategy.py
 from datamodel import OrderDepth, TradingState, Order
+=======
+from tutorial.datamodel import OrderDepth, TradingState, Order
+>>>>>>> 7fecebb0fd61c4b965c21df7b5538cf029d3cb31:tutorial/test.py
 from typing import Dict, List
 import json
 import math
