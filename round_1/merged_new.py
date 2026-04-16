@@ -168,18 +168,18 @@ class Trader:
             if product == "INTARIAN_PEPPER_ROOT":
                 if current_position < limit and max_buy > 0:
                     remaining_to_buy = max_buy
-                    
+
                     # 1. AGGRESSIVE BUYING (with a price cap)
                     # Only buy asks that are at or just 1 tick above the best_ask
-                    acceptable_ask = best_ask + 1 
-                    
+                    acceptable_ask = best_ask + 1
+
                     for ask_price in sorted(order_depth.sell_orders.keys()):
                         if remaining_to_buy <= 0:
                             break
                         # Stop buying if the order book gets too expensive
                         if ask_price > acceptable_ask:
                             break
-                            
+
                         vol = min(remaining_to_buy, -order_depth.sell_orders[ask_price])
                         orders.append(Order(product, ask_price, vol))
                         remaining_to_buy -= vol
