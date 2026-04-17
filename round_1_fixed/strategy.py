@@ -1,87 +1,191 @@
-from backtest.datamodel import OrderDepth, TradingState, Order
+from datamodel import OrderDepth, TradingState, Order
 from typing import Dict, List, Optional, Tuple
 import json
 import math
 
 
 class Trader:
-    ROOT_PRODUCT = "INTARIAN_PEPPER_ROOT"
-    OSMIUM_PRODUCT = "ASH_COATED_OSMIUM"
-
     POSITION_LIMITS = {
-        ROOT_PRODUCT: 80,
-        OSMIUM_PRODUCT: 80,
+        "INTARIAN_PEPPER_ROOT": 80,
+        "ASH_COATED_OSMIUM": 80,
     }
 
-    HISTORY_LENGTH = 20
-    ENTRY_Z = 0.8
-    EXIT_Z = 0.4
+    # =========================
+    # PEPPER PARAMETERS
+    # =========================
+    PEPPER_CORE_HOLD = 76
+    PEPPER_MIN_SPREAD = 18
+    PEPPER_TRADE_CLIP = 2
+    PEPPER_QUOTE_IMPROVEMENT = 1
 
+    # =========================
+    # OSMIUM PARAMETERS
+    # =========================
+    OSMIUM_PRODUCT = "ASH_COATED_OSMIUM"
+    OSMIUM_POSITION_LIMIT = 80
+
+    # --- signal ---
+    HISTORY_LENGTH = 3
+    ENTRY_Z = 0.6
+    EXIT_Z = 0.5
+
+    # --- quoting / execution ---
     BASE_QUOTE_OFFSET = 1
-    INVENTORY_SKEW = 0.05
-
-    SINGLE_SIDE_ORDER_SIZE = 5
-    SINGLE_SIDE_EDGE = 1.0
-    QUOTE_SIZE = 15
+    PASSIVE_ORDER_SIZE = 30
+    MAX_TAKE_SIZE = 30
+    INVENTORY_SKEW = 1.5  # max skew in ticks at full position
 
     def __init__(self):
-        self.osmium_position = 0
+        # Osmium state
+        self.position = 0
         self.buy_orders_sent = 0
         self.sell_orders_sent = 0
-        self.mid_history: List[float] = []
+        self.mid_history = []
 
+    def bid(self):
+        return 15
+
+    # =========================
+    # PEPPER LOGIC
+    # =========================
+    def add_wide_spread_passive_quotes(
+        self,
+        product: str,
+        order_depth: OrderDepth,
+        orders: List[Order],
+        current_position: int,
+        limit: int,
+    ) -> None:
+        if product != "INTARIAN_PEPPER_ROOT":
+            return
+        if not order_depth.buy_orders or not order_depth.sell_orders:
+            return
+
+        best_bid = max(order_depth.buy_orders.keys())
+        best_ask = min(order_depth.sell_orders.keys())
+        spread = best_ask - best_bid
+
+        if spread < self.PEPPER_MIN_SPREAD:
+            return
+
+        pending_buys = sum(
+            order.quantity for order in orders if order.quantity > 0
+        )
+        pending_sells = -sum(
+            order.quantity for order in orders if order.quantity < 0
+        )
+
+        working_position = current_position + pending_buys - pending_sells
+        core_target = min(limit, self.PEPPER_CORE_HOLD)
+
+        reserve_inventory = max(0, working_position - core_target)
+        reserve_capacity = max(0, limit - working_position)
+
+        # Quote only one side at a time and only inside a genuinely wide spread
+        if reserve_inventory > 0:
+            sell_size = min(self.PEPPER_TRADE_CLIP, reserve_inventory)
+            sell_price = best_ask - self.PEPPER_QUOTE_IMPROVEMENT
+            if sell_size > 0 and sell_price > best_bid:
+                orders.append(Order(product, sell_price, -sell_size))
+        elif reserve_capacity > 0:
+            buy_size = min(self.PEPPER_TRADE_CLIP, reserve_capacity)
+            buy_price = best_bid + self.PEPPER_QUOTE_IMPROVEMENT
+            if buy_size > 0 and buy_price < best_ask:
+                orders.append(Order(product, buy_price, buy_size))
+
+    # =========================
+    # OSMIUM HELPERS
+    # =========================
     def send_sell_order(
         self, orders: List[Order], product: str, price: int, amount: int
-    ) -> None:
-        if amount >= 0:
-            amount = -abs(amount)
-        orders.append(Order(product, int(price), int(amount)))
+    ):
+        size = min(amount, self.remaining_sell_capacity())
+        if size > 0:
+            orders.append(Order(product, int(price), -int(size)))
+            self.sell_orders_sent += int(size)
 
     def send_buy_order(
         self, orders: List[Order], product: str, price: int, amount: int
-    ) -> None:
-        if amount <= 0:
-            amount = abs(amount)
-        orders.append(Order(product, int(price), int(amount)))
+    ):
+        size = min(amount, self.remaining_buy_capacity())
+        if size > 0:
+            orders.append(Order(product, int(price), int(size)))
+            self.buy_orders_sent += int(size)
 
     def get_product_pos(self, state: TradingState, product: str) -> int:
         return state.position.get(product, 0)
 
     def remaining_buy_capacity(self) -> int:
-        limit = self.POSITION_LIMITS[self.OSMIUM_PRODUCT]
-        return max(0, limit - self.osmium_position)
+        return max(
+            0,
+            self.OSMIUM_POSITION_LIMIT - self.position - self.buy_orders_sent,
+        )
 
     def remaining_sell_capacity(self) -> int:
-        limit = self.POSITION_LIMITS[self.OSMIUM_PRODUCT]
-        return max(0, limit + self.osmium_position)
+        return max(
+            0,
+            self.OSMIUM_POSITION_LIMIT + self.position - self.sell_orders_sent,
+        )
 
-    def load_history(self, state: TradingState) -> None:
-        if self.mid_history or not state.traderData:
+    # =========================
+    # OSMIUM PERSISTENCE
+    # =========================
+    def load_history(self, state: TradingState):
+        if self.mid_history:
             return
-
+        if not state.traderData:
+            return
         try:
             saved = json.loads(state.traderData)
-            self.mid_history = saved.get("mid_history", [])
+
+            # Preferred merged format
+            if isinstance(saved, dict) and "osmium_mid_history" in saved:
+                self.mid_history = saved.get("osmium_mid_history", [])
+            # Backward-compatible with standalone osmium file
+            elif isinstance(saved, dict) and "mid_history" in saved:
+                self.mid_history = saved.get("mid_history", [])
+            else:
+                self.mid_history = []
         except Exception:
             self.mid_history = []
 
-    def save_trader_data(self, last_mid_prices: Dict[str, float]) -> str:
-        return json.dumps(
-            {
-                "mid_history": self.mid_history[-self.HISTORY_LENGTH :],
-                "last_mid_prices": last_mid_prices,
-            }
+    def save_state(self, pepper_data: Dict[str, float]):
+        payload = {
+            "pepper_mid_prices": pepper_data,
+            "osmium_mid_history": self.mid_history[-self.HISTORY_LENGTH :],
+        }
+        return json.dumps(payload)
+
+    # =========================
+    # OSMIUM PRICE / SIGNAL
+    # =========================
+    def get_best_bid_ask(
+        self, order_depth: OrderDepth
+    ) -> Tuple[Optional[int], Optional[int]]:
+        best_bid = (
+            max(order_depth.buy_orders.keys())
+            if order_depth.buy_orders
+            else None
         )
+        best_ask = (
+            min(order_depth.sell_orders.keys())
+            if order_depth.sell_orders
+            else None
+        )
+        return best_bid, best_ask
 
     def get_mid_price(self, order_depth: OrderDepth) -> Optional[float]:
-        if not order_depth.buy_orders or not order_depth.sell_orders:
-            return None
-        return (
-            max(order_depth.buy_orders.keys())
-            + min(order_depth.sell_orders.keys())
-        ) / 2
+        best_bid, best_ask = self.get_best_bid_ask(order_depth)
 
-    def update_mid_history(self, mid: float) -> None:
+        if best_bid is not None and best_ask is not None:
+            return (best_bid + best_ask) / 2
+
+        if self.mid_history:
+            return self.mid_history[-1]
+
+        return None
+
+    def update_mid_history(self, mid: float):
         self.mid_history.append(mid)
         if len(self.mid_history) > self.HISTORY_LENGTH:
             self.mid_history.pop(0)
@@ -93,7 +197,7 @@ class Trader:
         var = sum((x - mean) ** 2 for x in self.mid_history) / len(
             self.mid_history
         )
-        return mean, math.sqrt(var)
+        return mean, math.sqrt(max(var, 0.0))
 
     def get_zscore(self, mid: float) -> Tuple[float, float]:
         mean, std = self.get_mean_std()
@@ -101,109 +205,150 @@ class Trader:
             return 0.0, mid
         return (mid - mean) / std, mean
 
-    def inventory_adjusted_fair(self, fair: float) -> float:
-        return fair - self.INVENTORY_SKEW * self.osmium_position
-
-    def handle_single_sided_book(
-        self, order_depth: OrderDepth, orders: List[Order]
-    ) -> bool:
-        has_bids = bool(order_depth.buy_orders)
-        has_asks = bool(order_depth.sell_orders)
-
-        if not has_bids and not has_asks:
-            return True
-
-        mean, _ = self.get_mean_std()
-
-        if not has_bids and has_asks:
-            best_ask = min(order_depth.sell_orders.keys())
-            best_ask_vol = -order_depth.sell_orders[best_ask]
-
-            if mean is not None and best_ask <= mean - self.SINGLE_SIDE_EDGE:
-                size = min(
-                    self.SINGLE_SIDE_ORDER_SIZE,
-                    best_ask_vol,
-                    self.remaining_buy_capacity(),
-                )
-                if size > 0:
-                    self.send_buy_order(
-                        orders, self.OSMIUM_PRODUCT, best_ask, size
+    # =========================
+    # OSMIUM EXECUTION LOGIC
+    # =========================
+    def take_mean_reversion_entries(
+        self,
+        order_depth: OrderDepth,
+        orders: List[Order],
+        mean: float,
+        z: float,
+    ):
+        if z < -self.ENTRY_Z:
+            taken = 0
+            for ask, vol in sorted(order_depth.sell_orders.items()):
+                ask_vol = -vol
+                if (
+                    ask <= mean
+                    and self.remaining_buy_capacity() > 0
+                    and taken < self.MAX_TAKE_SIZE
+                ):
+                    size = min(
+                        ask_vol,
+                        self.remaining_buy_capacity(),
+                        self.MAX_TAKE_SIZE - taken,
                     )
-            return True
-
-        if has_bids and not has_asks:
-            best_bid = max(order_depth.buy_orders.keys())
-            best_bid_vol = order_depth.buy_orders[best_bid]
-
-            if mean is not None and best_bid >= mean + self.SINGLE_SIDE_EDGE:
-                size = min(
-                    self.SINGLE_SIDE_ORDER_SIZE,
-                    best_bid_vol,
-                    self.remaining_sell_capacity(),
-                )
-                if size > 0:
-                    self.send_sell_order(
-                        orders, self.OSMIUM_PRODUCT, best_bid, -size
-                    )
-            return True
-
-        return False
-
-    def trade_osmium(self, state: TradingState, orders: List[Order]) -> None:
-        order_depth = state.order_depths[self.OSMIUM_PRODUCT]
-
-        if self.handle_single_sided_book(order_depth, orders):
-            return
-
-        mid = self.get_mid_price(order_depth)
-        if mid is None:
-            return
-
-        self.update_mid_history(mid)
-        z_score, mean = self.get_zscore(mid)
-        fair = self.inventory_adjusted_fair(mean)
-
-        best_bid = max(order_depth.buy_orders.keys())
-        best_ask = min(order_depth.sell_orders.keys())
-
-        if z_score < -self.ENTRY_Z:
-            buy_capacity = self.remaining_buy_capacity()
-            for ask, volume in sorted(order_depth.sell_orders.items()):
-                if buy_capacity <= 0:
-                    break
-                available = -volume
-                if ask <= fair:
-                    size = min(available, buy_capacity)
                     if size > 0:
                         self.send_buy_order(
                             orders, self.OSMIUM_PRODUCT, ask, size
                         )
-                        buy_capacity -= size
-        elif z_score > self.ENTRY_Z:
-            sell_capacity = self.remaining_sell_capacity()
-            for bid, volume in sorted(
+                        taken += size
+
+        elif z > self.ENTRY_Z:
+            taken = 0
+            for bid, vol in sorted(
                 order_depth.buy_orders.items(), reverse=True
             ):
-                if sell_capacity <= 0:
-                    break
-                available = volume
-                if bid >= fair:
-                    size = min(available, sell_capacity)
+                bid_vol = vol
+                if (
+                    bid >= mean
+                    and self.remaining_sell_capacity() > 0
+                    and taken < self.MAX_TAKE_SIZE
+                ):
+                    size = min(
+                        bid_vol,
+                        self.remaining_sell_capacity(),
+                        self.MAX_TAKE_SIZE - taken,
+                    )
                     if size > 0:
                         self.send_sell_order(
-                            orders, self.OSMIUM_PRODUCT, bid, -size
+                            orders, self.OSMIUM_PRODUCT, bid, size
                         )
-                        sell_capacity -= size
+                        taken += size
 
-        buy_capacity = self.remaining_buy_capacity()
-        sell_capacity = self.remaining_sell_capacity()
+    def take_exit_orders(
+        self,
+        order_depth: OrderDepth,
+        orders: List[Order],
+        mean: float,
+        z: float,
+    ):
+        if self.position > 0 and z >= -self.EXIT_Z:
+            for bid, vol in sorted(
+                order_depth.buy_orders.items(), reverse=True
+            ):
+                if bid >= mean and self.remaining_sell_capacity() > 0:
+                    size = min(
+                        vol,
+                        self.position,
+                        self.remaining_sell_capacity(),
+                        self.MAX_TAKE_SIZE,
+                    )
+                    if size > 0:
+                        self.send_sell_order(
+                            orders, self.OSMIUM_PRODUCT, bid, size
+                        )
+                    break
 
-        bid_price = min(best_bid + 1, int(fair - self.BASE_QUOTE_OFFSET))
-        ask_price = max(best_ask - 1, int(fair + self.BASE_QUOTE_OFFSET))
+        elif self.position < 0 and z <= self.EXIT_Z:
+            for ask, vol in sorted(order_depth.sell_orders.items()):
+                ask_vol = -vol
+                if ask <= mean and self.remaining_buy_capacity() > 0:
+                    size = min(
+                        ask_vol,
+                        -self.position,
+                        self.remaining_buy_capacity(),
+                        self.MAX_TAKE_SIZE,
+                    )
+                    if size > 0:
+                        self.send_buy_order(
+                            orders, self.OSMIUM_PRODUCT, ask, size
+                        )
+                    break
+
+    def place_passive_quotes(
+        self,
+        order_depth: OrderDepth,
+        orders: List[Order],
+        mean: float,
+        z: float,
+    ):
+        best_bid, best_ask = self.get_best_bid_ask(order_depth)
+
+        if best_bid is None and best_ask is None:
+            return
+
+        fair = mean
+
+        pos_ratio = self.position / self.OSMIUM_POSITION_LIMIT
+        skew = self.INVENTORY_SKEW * pos_ratio
+
+        bid_offset = self.BASE_QUOTE_OFFSET
+        ask_offset = self.BASE_QUOTE_OFFSET
+
+        if z > self.EXIT_Z:
+            bid_offset += 1
+        elif z < -self.EXIT_Z:
+            ask_offset += 1
+
+        bid_price = int(fair - bid_offset - skew)
+        ask_price = int(fair + ask_offset - skew)
+
+        if best_bid is not None:
+            bid_price = min(best_bid + 1, bid_price)
+        if best_ask is not None:
+            ask_price = max(best_ask - 1, ask_price)
+
+        if best_ask is not None:
+            bid_price = min(bid_price, best_ask - 1)
+        if best_bid is not None:
+            ask_price = max(ask_price, best_bid + 1)
 
         if bid_price < ask_price:
-            buy_size = min(self.QUOTE_SIZE, buy_capacity)
-            sell_size = min(self.QUOTE_SIZE, sell_capacity)
+            buy_size = min(
+                self.PASSIVE_ORDER_SIZE, self.remaining_buy_capacity()
+            )
+            sell_size = min(
+                self.PASSIVE_ORDER_SIZE, self.remaining_sell_capacity()
+            )
+
+            if self.position > 40:
+                buy_size = min(buy_size, 6)
+                sell_size = min(self.remaining_sell_capacity(), 12)
+            elif self.position < -40:
+                sell_size = min(sell_size, 6)
+                buy_size = min(self.remaining_buy_capacity(), 12)
 
             if buy_size > 0:
                 self.send_buy_order(
@@ -211,54 +356,96 @@ class Trader:
                 )
             if sell_size > 0:
                 self.send_sell_order(
-                    orders, self.OSMIUM_PRODUCT, ask_price, -sell_size
+                    orders, self.OSMIUM_PRODUCT, ask_price, sell_size
                 )
 
-    def trade_pepper_root(
-        self, state: TradingState, order_depth: OrderDepth, orders: List[Order]
-    ) -> None:
-        product = self.ROOT_PRODUCT
-        current_position = state.position.get(product, 0)
-        limit = self.POSITION_LIMITS[product]
-        max_buy = limit - current_position
+    def trade_osmium(self, state: TradingState, orders: List[Order]):
+        od = state.order_depths[self.OSMIUM_PRODUCT]
+        mid = self.get_mid_price(od)
+        if mid is None:
+            return
 
-        if (
-            current_position < limit
-            and max_buy > 0
-            and order_depth.sell_orders
-        ):
-            remaining = max_buy
-            for ask_price in sorted(order_depth.sell_orders.keys()):
-                if remaining <= 0:
-                    break
-                volume = min(remaining, -order_depth.sell_orders[ask_price])
-                orders.append(Order(product, ask_price, volume))
-                remaining -= volume
+        self.update_mid_history(mid)
+        z, mean = self.get_zscore(mid)
 
+        self.take_exit_orders(od, orders, mean, z)
+        self.take_mean_reversion_entries(od, orders, mean, z)
+        self.place_passive_quotes(od, orders, mean, z)
+
+    # =========================
+    # MAIN
+    # =========================
     def run(self, state: TradingState):
         result: Dict[str, List[Order]] = {}
-        last_mid_prices: Dict[str, float] = {}
+        pepper_data: Dict[str, float] = {}
 
-        self.load_history(state)
-
-        self.osmium_position = self.get_product_pos(state, self.OSMIUM_PRODUCT)
+        # Reset osmium order counters each run
+        self.position = self.get_product_pos(state, self.OSMIUM_PRODUCT)
         self.buy_orders_sent = 0
         self.sell_orders_sent = 0
+        self.load_history(state)
 
         for product, order_depth in state.order_depths.items():
             orders: List[Order] = []
 
-            mid_price = self.get_mid_price(order_depth)
-            if mid_price is not None:
-                last_mid_prices[product] = mid_price
+            if (
+                len(order_depth.buy_orders) == 0
+                or len(order_depth.sell_orders) == 0
+            ):
+                result[product] = orders
+                continue
 
-            if product == self.ROOT_PRODUCT:
-                self.trade_pepper_root(state, order_depth, orders)
+            best_bid = max(order_depth.buy_orders.keys())
+            best_ask = min(order_depth.sell_orders.keys())
+            mid_price = (best_bid + best_ask) / 2
+            pepper_data[product] = mid_price
+
+            current_position = state.position.get(product, 0)
+            limit = self.POSITION_LIMITS.get(product, 20)
+            max_buy = limit - current_position
+
+            # ---------------- INTARIAN_PEPPER_ROOT ----------------
+            if product == "INTARIAN_PEPPER_ROOT":
+                if current_position < limit and max_buy > 0:
+                    remaining_to_buy = max_buy
+
+                    # 1. AGGRESSIVE BUYING (with a price cap)
+                    acceptable_ask = best_ask + 0.75
+
+                    for ask_price in sorted(order_depth.sell_orders.keys()):
+                        if remaining_to_buy <= 0:
+                            break
+                        if ask_price > acceptable_ask:
+                            break
+
+                        vol = min(
+                            remaining_to_buy,
+                            -order_depth.sell_orders[ask_price],
+                        )
+                        orders.append(Order(product, ask_price, vol))
+                        remaining_to_buy -= vol
+
+                    # 2. PASSIVE BUYING
+                    if remaining_to_buy > 0:
+                        passive_bid_price = best_ask - 0.75
+                        orders.append(
+                            Order(product, passive_bid_price, remaining_to_buy)
+                        )
+
+                self.add_wide_spread_passive_quotes(
+                    product,
+                    order_depth,
+                    orders,
+                    current_position,
+                    limit,
+                )
+
+            # ---------------- ASH_COATED_OSMIUM ----------------
             elif product == self.OSMIUM_PRODUCT:
                 self.trade_osmium(state, orders)
 
             result[product] = orders
 
+        traderData = self.save_state(pepper_data)
         conversions = 0
-        trader_data = self.save_trader_data(last_mid_prices)
-        return result, conversions, trader_data
+        return result, conversions, traderData
