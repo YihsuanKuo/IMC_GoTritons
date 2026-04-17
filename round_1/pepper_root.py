@@ -46,7 +46,7 @@ class Trader:
                     
                     # 1. AGGRESSIVE BUYING (with a price cap)
                     # Only buy asks that are at or just 1 tick above the best_ask
-                    acceptable_ask = best_ask + 1 
+                    acceptable_ask = best_ask + 2.5 
                     
                     for ask_price in sorted(order_depth.sell_orders.keys()):
                         if remaining_to_buy <= 0:
@@ -64,7 +64,7 @@ class Trader:
                     # to try and get filled at a cheaper price
                     if remaining_to_buy > 0:
                         # Place a bid 1 tick below the best ask (or at the best bid)
-                        passive_bid_price = best_ask - 1
+                        passive_bid_price = best_ask - 2.5
                         orders.append(Order(product, passive_bid_price, remaining_to_buy))
 
             result[product] = orders
