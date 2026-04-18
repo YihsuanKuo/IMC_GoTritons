@@ -9,11 +9,31 @@ class Trader:
         "TOMATOES": 80,
     }
 
+<<<<<<< HEAD:test.py
+    def __init__(self):
+        # EMERALDS: keep simple and anchored
+        self.emerald_fair = 10000.0
+
+        # TOMATOES: use fast/slow EMA to detect trend
+        self.tom_fast_beta = 0.30
+        self.tom_slow_beta = 0.10
+        self.tom_trend_coeff = 1.2
+        self.tom_trend_threshold = 1.5
+
+        # Trading aggressiveness
+        self.tom_take_edge = 2.0
+        self.em_take_edge = 2.0
+
+        # Passive quote sizes
+        self.em_passive_size = 12
+        self.tom_passive_size = 8
+=======
     def __init__(self, lam=[0.6, 0.6], alpha=[None, None]):
         self.er_lam = lam[0]
         self.tom_lam = lam[1]
         self.er_alpha = alpha[0]
         self.tom_alpha = alpha[1]
+>>>>>>> 7fecebb0fd61c4b965c21df7b5538cf029d3cb31:tutorial/strategy.py
 
     def bid(self):
         return 15
@@ -25,18 +45,22 @@ class Trader:
         elif abs_pos < 30:
             return 0.05
         else:
-            return 0.1
+            return 0.10
 
     def run(self, state: TradingState):
         result: Dict[str, List[Order]] = {}
 
+<<<<<<< HEAD:test.py
+        # Load saved state
+=======
+>>>>>>> 7fecebb0fd61c4b965c21df7b5538cf029d3cb31:tutorial/strategy.py
         if state.traderData:
             try:
-                saved_data = json.loads(state.traderData)
+                saved = json.loads(state.traderData)
             except Exception:
-                saved_data = {}
+                saved = {}
         else:
-            saved_data = {}
+            saved = {}
 
         new_data = {}
 
@@ -56,6 +80,10 @@ class Trader:
             best_ask = min(order_depth.sell_orders.keys())
             best_ask_volume = order_depth.sell_orders[best_ask]
 
+<<<<<<< HEAD:test.py
+            mid_price = (best_bid + best_ask) / 2
+            spread = best_ask - best_bid
+=======
             # Volume-weighted average price across all visible order book levels
             total_value = 0.0
             total_volume = 0
@@ -68,6 +96,7 @@ class Trader:
             mid_price = total_value / total_volume if total_volume > 0 else (best_bid + best_ask) / 2
 
             new_data[product] = mid_price
+>>>>>>> 7fecebb0fd61c4b965c21df7b5538cf029d3cb31:tutorial/strategy.py
 
             current_position = state.position.get(product, 0)
             limit = self.POSITION_LIMITS.get(product, 20)
@@ -75,6 +104,17 @@ class Trader:
             max_buy = limit - current_position
             max_sell = limit + current_position
 
+<<<<<<< HEAD:test.py
+            alpha = self.get_alpha(current_position)
+
+            # ==================== EMERALDS ====================
+            if product == "EMERALDS":
+                # Fixed fair value around 10000 with inventory penalty
+                fair_price = self.emerald_fair - alpha * current_position
+
+                # Aggressive taking only if clearly favorable
+                if best_ask <= fair_price - self.em_take_edge:
+=======
             # ---------------- EMERALDS ----------------
             if product == "EMERALDS":
                 prev_mid = saved_data.get("EMERALDS", mid_price)
@@ -120,26 +160,157 @@ class Trader:
 
                 # aggressive order taking
                 if best_ask <= fair_price - edge:
+>>>>>>> 7fecebb0fd61c4b965c21df7b5538cf029d3cb31:tutorial/strategy.py
                     buy_volume = min(-best_ask_volume, max_buy)
                     if buy_volume > 0:
                         orders.append(Order(product, best_ask, buy_volume))
 
-                if best_bid >= fair_price + edge:
+                if best_bid >= fair_price + self.em_take_edge:
                     sell_volume = min(best_bid_volume, max_sell)
                     if sell_volume > 0:
                         orders.append(Order(product, best_bid, -sell_volume))
 
-                # tighter passive quotes
-                passive_buy = min(best_bid + 1, int(fair_price))
-                passive_sell = max(best_ask - 1, int(fair_price))
+                # Passive MM around fair value
+                if spread >= 2:
+                    passive_buy = min(best_bid + 1, int(fair_price))
+                    passive_sell = max(best_ask - 1, int(fair_price))
+                else:
+                    passive_buy = min(best_bid, int(fair_price))
+                    passive_sell = max(best_ask, int(fair_price))
 
                 if max_buy > 0:
-                    orders.append(Order(product, passive_buy, min(8, max_buy)))
+                    orders.append(
+                        Order(
+                            product,
+                            passive_buy,
+                            min(self.em_passive_size, max_buy),
+                        )
+                    )
 
                 if max_sell > 0:
                     orders.append(
-                        Order(product, passive_sell, -min(8, max_sell))
+                        Order(
+                            product,
+                            passive_sell,
+                            -min(self.em_passive_size, max_sell),
+                        )
                     )
+
+                new_data["EMERALDS"] = {"last_mid": mid_price}
+
+            # ==================== TOMATOES ====================
+            elif product == "TOMATOES":
+                prev_fast = saved.get("TOMATOES", {}).get("fast", mid_price)
+                prev_slow = saved.get("TOMATOES", {}).get("slow", mid_price)
+
+                fast = (
+                    self.tom_fast_beta * mid_price
+                    + (1 - self.tom_fast_beta) * prev_fast
+                )
+                slow = (
+                    self.tom_slow_beta * mid_price
+                    + (1 - self.tom_slow_beta) * prev_slow
+                )
+                trend = fast - slow
+
+                # Fair price includes trend signal and inventory penalty
+                fair_price = (
+                    mid_price
+                    + self.tom_trend_coeff * trend
+                    - alpha * current_position
+                )
+
+                bullish = trend > self.tom_trend_threshold
+                bearish = trend < -self.tom_trend_threshold
+                neutral = not bullish and not bearish
+
+                # Aggressive taking only when edge is meaningful
+                if not bearish and best_ask <= fair_price - self.tom_take_edge:
+                    buy_volume = min(-best_ask_volume, max_buy)
+                    if buy_volume > 0:
+                        orders.append(Order(product, best_ask, buy_volume))
+
+                if not bullish and best_bid >= fair_price + self.tom_take_edge:
+                    sell_volume = min(best_bid_volume, max_sell)
+                    if sell_volume > 0:
+                        orders.append(Order(product, best_bid, -sell_volume))
+
+                # Passive quoting logic by regime
+                if neutral:
+                    passive_buy = min(best_bid + 1, int(fair_price))
+                    passive_sell = max(best_ask - 1, int(fair_price))
+
+                elif bullish:
+                    # In uptrend: still bid, but do not sell too aggressively
+                    passive_buy = min(best_bid + 1, int(fair_price))
+                    passive_sell = max(best_ask, int(fair_price) + 1)
+
+                else:  # bearish
+                    # In downtrend: still ask, but do not buy too aggressively
+                    passive_buy = min(best_bid, int(fair_price) - 1)
+                    passive_sell = max(best_ask - 1, int(fair_price))
+
+                # Optional one-sided bias in strong trends
+                if bullish:
+                    if max_buy > 0:
+                        orders.append(
+                            Order(
+                                product,
+                                passive_buy,
+                                min(self.tom_passive_size, max_buy),
+                            )
+                        )
+                    if max_sell > 0 and current_position > 0:
+                        orders.append(
+                            Order(
+                                product,
+                                passive_sell,
+                                -min(self.tom_passive_size // 2, max_sell),
+                            )
+                        )
+
+                elif bearish:
+                    if max_sell > 0:
+                        orders.append(
+                            Order(
+                                product,
+                                passive_sell,
+                                -min(self.tom_passive_size, max_sell),
+                            )
+                        )
+                    if max_buy > 0 and current_position < 0:
+                        orders.append(
+                            Order(
+                                product,
+                                passive_buy,
+                                min(self.tom_passive_size // 2, max_buy),
+                            )
+                        )
+
+                else:
+                    if max_buy > 0:
+                        orders.append(
+                            Order(
+                                product,
+                                passive_buy,
+                                min(self.tom_passive_size, max_buy),
+                            )
+                        )
+                    if max_sell > 0:
+                        orders.append(
+                            Order(
+                                product,
+                                passive_sell,
+                                -min(self.tom_passive_size, max_sell),
+                            )
+                        )
+
+                new_data["TOMATOES"] = {
+                    "fast": fast,
+                    "slow": slow,
+                    "last_mid": mid_price,
+                    "trend": trend,
+                }
 
             result[product] = orders
 

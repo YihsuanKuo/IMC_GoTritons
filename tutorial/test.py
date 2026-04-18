@@ -1,6 +1,11 @@
+<<<<<<< HEAD:backtester_project/strategies/strategy.py
+from datamodel import OrderDepth, TradingState, Order
+=======
 from tutorial.datamodel import OrderDepth, TradingState, Order
+>>>>>>> 7fecebb0fd61c4b965c21df7b5538cf029d3cb31:tutorial/test.py
 from typing import Dict, List
 import json
+import math
 
 
 class Trader:
@@ -25,7 +30,20 @@ class Trader:
         elif abs_pos < 30:
             return 0.05
         else:
-            return 0.1
+            return 0.10
+
+    def get_quotes(self, best_bid: int, best_ask: int, fair: float):
+        """
+        Build passive quotes around fair value while preventing bid >= ask.
+        """
+        bid_quote = min(best_bid + 1, math.floor(fair))
+        ask_quote = max(best_ask - 1, math.ceil(fair))
+
+        if bid_quote >= ask_quote:
+            bid_quote = best_bid
+            ask_quote = best_ask
+
+        return bid_quote, ask_quote
 
     def run(self, state: TradingState):
         result: Dict[str, List[Order]] = {}
@@ -43,10 +61,7 @@ class Trader:
         for product, order_depth in state.order_depths.items():
             orders: List[Order] = []
 
-            if (
-                len(order_depth.buy_orders) == 0
-                or len(order_depth.sell_orders) == 0
-            ):
+            if not order_depth.buy_orders or not order_depth.sell_orders:
                 result[product] = orders
                 continue
 
@@ -54,10 +69,10 @@ class Trader:
             best_bid_volume = order_depth.buy_orders[best_bid]
 
             best_ask = min(order_depth.sell_orders.keys())
-            best_ask_volume = order_depth.sell_orders[best_ask]
+            best_ask_volume = abs(order_depth.sell_orders[best_ask])
 
             mid_price = (best_bid + best_ask) / 2
-            new_data[product] = mid_price
+            spread = best_ask - best_bid
 
             current_position = state.position.get(product, 0)
             limit = self.POSITION_LIMITS.get(product, 20)
@@ -67,69 +82,156 @@ class Trader:
 
             # ---------------- EMERALDS ----------------
             if product == "EMERALDS":
-                prev_mid = saved_data.get("EMERALDS", mid_price)
-                
-                if self.er_alpha is None:
-                    self.er_alpha = self.get_alpha(current_position)
+                # EMERALDS is very stable; use a near-constant anchor
+                base_fair = 10000.0
 
-                fair_price = (
-                    self.er_lam * prev_mid + (1 - self.er_lam) * mid_price - self.er_alpha * current_position
+                # inventory penalty should be recomputed every step unless user fixed it
+                alpha = (
+                    self.er_alpha
+                    if self.er_alpha is not None
+                    else self.get_alpha(current_position)
                 )
 
-                spread = best_ask - best_bid
+                fair_price = base_fair - alpha * current_position
 
-                # step inside the spread to improve fill probability
-                if spread >= 2:
-                    buy_quote = min(best_bid + 1, int(fair_price))
-                    sell_quote = max(best_ask - 1, int(fair_price))
-                else:
-                    buy_quote = best_bid
-                    sell_quote = best_ask
-
-                if max_buy > 0:
-                    orders.append(Order(product, buy_quote, min(15, max_buy)))
-
-                if max_sell > 0:
-                    orders.append(
-                        Order(product, sell_quote, -min(15, max_sell))
-                    )
-
-            # ---------------- TOMATOES ----------------
-            elif product == "TOMATOES":
-                prev_mid = saved_data.get("TOMATOES", mid_price)
-
-                if self.tom_alpha is None:
-                    self.tom_alpha = self.get_alpha(current_position)
-
-                fair_price = (
-                    self.tom_lam * prev_mid + (1 - self.tom_lam) * mid_price - self.tom_alpha * current_position
-                )
-
-                # smaller threshold => more aggressive trading
-                edge = 0
-
-                # aggressive order taking
-                if best_ask <= fair_price - edge:
-                    buy_volume = min(-best_ask_volume, max_buy)
+                # aggressive taking only when clearly favorable
+                if best_ask < fair_price and max_buy > 0:
+                    buy_volume = min(best_ask_volume, max_buy, 12)
                     if buy_volume > 0:
                         orders.append(Order(product, best_ask, buy_volume))
 
-                if best_bid >= fair_price + edge:
-                    sell_volume = min(best_bid_volume, max_sell)
+                if best_bid > fair_price and max_sell > 0:
+                    sell_volume = min(best_bid_volume, max_sell, 12)
                     if sell_volume > 0:
                         orders.append(Order(product, best_bid, -sell_volume))
 
-                # tighter passive quotes
-                passive_buy = min(best_bid + 1, int(fair_price))
-                passive_sell = max(best_ask - 1, int(fair_price))
+                # passive MM, but size should depend on inventory
+                bid_quote, ask_quote = self.get_quotes(
+                    best_bid, best_ask, fair_price
+                )
 
-                if max_buy > 0:
-                    orders.append(Order(product, passive_buy, min(8, max_buy)))
+                buy_size = min(12, max_buy)
+                sell_size = min(12, max_sell)
 
-                if max_sell > 0:
-                    orders.append(
-                        Order(product, passive_sell, -min(8, max_sell))
-                    )
+                if current_position > 40:
+                    buy_size = min(4, max_buy)
+                    sell_size = min(16, max_sell)
+                elif current_position < -40:
+                    buy_size = min(16, max_buy)
+                    sell_size = min(4, max_sell)
+
+                if buy_size > 0:
+                    orders.append(Order(product, bid_quote, buy_size))
+                if sell_size > 0:
+                    orders.append(Order(product, ask_quote, -sell_size))
+
+                new_data[product] = {
+                    "fair": fair_price,
+                    "mid": mid_price,
+                }
+
+            # ---------------- TOMATOES ----------------
+            elif product == "TOMATOES":
+                prev = saved_data.get(product, {})
+                prev_fair = prev.get("fair", mid_price)
+                prev_mid = prev.get("mid", mid_price)
+
+                alpha = (
+                    self.tom_alpha
+                    if self.tom_alpha is not None
+                    else self.get_alpha(current_position)
+                )
+
+                # true EWMA fair value
+                raw_fair = (
+                    self.tom_lam * prev_fair + (1 - self.tom_lam) * mid_price
+                )
+
+                # simple trend estimate
+                trend = mid_price - prev_mid
+
+                # inventory-skewed fair
+                fair_price = raw_fair - alpha * current_position
+
+                # dynamic edge
+                edge = max(1.0, 0.5 * spread)
+
+                # ---------------- risk-off logic ----------------
+                # if inventory is already large and trend is against it, flatten some
+                if current_position >= 40 and trend < -1.0:
+                    reduce_qty = min(12, current_position, best_bid_volume)
+                    if reduce_qty > 0:
+                        orders.append(Order(product, best_bid, -reduce_qty))
+                    result[product] = orders
+                    new_data[product] = {
+                        "fair": raw_fair,
+                        "mid": mid_price,
+                    }
+                    continue
+
+                if current_position <= -40 and trend > 1.0:
+                    reduce_qty = min(12, -current_position, best_ask_volume)
+                    if reduce_qty > 0:
+                        orders.append(Order(product, best_ask, reduce_qty))
+                    result[product] = orders
+                    new_data[product] = {
+                        "fair": raw_fair,
+                        "mid": mid_price,
+                    }
+                    continue
+
+                # ---------------- aggressive taking ----------------
+                # do not keep buying in a clear downtrend
+                allow_buy = not (trend < -1.0 and current_position >= 0)
+                allow_sell = not (trend > 1.0 and current_position <= 0)
+
+                if allow_buy and best_ask <= fair_price - edge and max_buy > 0:
+                    buy_volume = min(best_ask_volume, max_buy, 10)
+                    if buy_volume > 0:
+                        orders.append(Order(product, best_ask, buy_volume))
+
+                if (
+                    allow_sell
+                    and best_bid >= fair_price + edge
+                    and max_sell > 0
+                ):
+                    sell_volume = min(best_bid_volume, max_sell, 10)
+                    if sell_volume > 0:
+                        orders.append(Order(product, best_bid, -sell_volume))
+
+                # ---------------- passive quoting ----------------
+                bid_quote, ask_quote = self.get_quotes(
+                    best_bid, best_ask, fair_price
+                )
+
+                buy_size = min(8, max_buy)
+                sell_size = min(8, max_sell)
+
+                # inventory-aware sizing
+                if current_position > 20:
+                    buy_size = min(3, max_buy)
+                    sell_size = min(12, max_sell)
+                elif current_position < -20:
+                    buy_size = min(12, max_buy)
+                    sell_size = min(3, max_sell)
+
+                # trend-aware quoting
+                if trend < -1.0 and current_position >= 0:
+                    buy_size = 0
+                    sell_size = min(12, max_sell)
+                elif trend > 1.0 and current_position <= 0:
+                    sell_size = 0
+                    buy_size = min(12, max_buy)
+
+                if buy_size > 0:
+                    orders.append(Order(product, bid_quote, buy_size))
+                if sell_size > 0:
+                    orders.append(Order(product, ask_quote, -sell_size))
+
+                new_data[product] = {
+                    "fair": raw_fair,
+                    "mid": mid_price,
+                }
 
             result[product] = orders
 
