@@ -131,7 +131,7 @@ class Trader:
                     self.send_sell_order(orders, self.ASH_PRODUCT, bid, -size)
 
         # market making
-        fair = mean
+        fair = mean 
         bid_price = min(best_bid + 1, int(fair - self.ASH_BASE_QUOTE_OFFSET))
         ask_price = max(best_ask - 1, int(fair + self.ASH_BASE_QUOTE_OFFSET))
 
