@@ -1,161 +1,140 @@
-from datamodel import OrderDepth, TradingState, Order
+from datamodel import TradingState, Order
 from typing import Dict, List
 import json
+import math
 
 
 class Trader:
     PRODUCT = "ASH_COATED_OSMIUM"
     POSITION_LIMIT = 80
 
+    HISTORY_LENGTH = 3
+    ENTRY_Z = 1.0
+    EXIT_Z = 0.4
+
+    BASE_QUOTE_OFFSET = 1
+    INVENTORY_SKEW = 0.02
+
     def __init__(self):
         self.position = 0
-        self.buy_orders_sent = 0
-        self.sell_orders_sent = 0
-        self.price_history: List[float] = []
+        self.mid_history = []
 
-    def send_sell_order(self, orders: List[Order], product: str, price: int, amount: int):
-        orders.append(Order(product, price, amount))
+    def send_sell_order(self, orders, product, price, amount):
+        orders.append(Order(product, int(price), int(amount)))
 
-    def send_buy_order(self, orders: List[Order], product: str, price: int, amount: int):
-        orders.append(Order(product, int(price), amount))
+    def send_buy_order(self, orders, product, price, amount):
+        orders.append(Order(product, int(price), int(amount)))
 
-    def get_product_pos(self, state: TradingState, product: str) -> int:
+    def get_product_pos(self, state, product):
         return state.position.get(product, 0)
 
-    def search_buys(
-        self,
-        state: TradingState,
-        orders: List[Order],
-        product: str,
-        acceptable_price: float,
-        depth: int = 1,
-    ):
-        order_depth = state.order_depths[product]
-        if len(order_depth.sell_orders) != 0:
-            book = list(order_depth.sell_orders.items())
-            for ask, amount in book[0:min(len(book), depth)]:
-                pos = self.get_product_pos(state, product)
+    def load_history(self, state):
+        if not state.traderData:
+            return
+        try:
+            saved = json.loads(state.traderData)
+            self.mid_history = saved.get("mid_history", [])
+        except Exception:
+            self.mid_history = []
 
-                if int(ask) < acceptable_price or (
-                    abs(ask - acceptable_price) < 1
-                    and (pos < 0 and abs(pos - amount) < abs(pos))
-                ):
-                    size = min(
-                        self.POSITION_LIMIT - self.position - self.buy_orders_sent,
-                        -amount,
-                    )
-                    if size > 0:
-                        self.buy_orders_sent += size
-                        self.send_buy_order(orders, product, ask, size)
+    def save_history(self):
+        return json.dumps({"mid_history": self.mid_history[-self.HISTORY_LENGTH:]})
 
-    def search_sells(
-        self,
-        state: TradingState,
-        orders: List[Order],
-        product: str,
-        acceptable_price: float,
-        depth: int = 1,
-    ):
-        order_depth = state.order_depths[product]
-        if len(order_depth.buy_orders) != 0:
-            book = list(order_depth.buy_orders.items())
-            for bid, amount in book[0:min(len(book), depth)]:
-                pos = self.get_product_pos(state, product)
+    def get_mid_price(self, order_depth):
+        if not order_depth.buy_orders or not order_depth.sell_orders:
+            return None
+        return (max(order_depth.buy_orders.keys()) + min(order_depth.sell_orders.keys())) / 2
 
-                if int(bid) > acceptable_price or (
-                    abs(bid - acceptable_price) < 1
-                    and (pos > 0 and abs(pos - amount) < abs(pos))
-                ):
-                    size = min(
-                        self.position + self.POSITION_LIMIT - self.sell_orders_sent,
-                        amount,
-                    )
-                    if size > 0:
-                        self.sell_orders_sent += size
-                        self.send_sell_order(orders, product, bid, -size)
+    def update_mid_history(self, mid):
+        self.mid_history.append(mid)
+        if len(self.mid_history) > self.HISTORY_LENGTH:
+            self.mid_history.pop(0)
 
-    def get_bid(self, state: TradingState, product: str, price: int):
-        order_depth = state.order_depths[product]
-        if len(order_depth.buy_orders) != 0:
-            book = list(order_depth.buy_orders.items())
-            for bid, _ in book:
-                if bid < price:
-                    return bid
-        return None
+    def get_mean_std(self):
+        if not self.mid_history:
+            return None, None
+        mean = sum(self.mid_history) / len(self.mid_history)
+        var = sum((x - mean) ** 2 for x in self.mid_history) / len(self.mid_history)
+        return mean, math.sqrt(var)
 
-    def get_ask(self, state: TradingState, product: str, price: int):
-        order_depth = state.order_depths[product]
-        if len(order_depth.sell_orders) != 0:
-            book = list(order_depth.sell_orders.items())
-            for ask, _ in book:
-                if ask > price:
-                    return ask
-        return None
+    def get_zscore(self, mid):
+        mean, std = self.get_mean_std()
+        if mean is None or std < 1e-6:
+            return 0, mid
+        return (mid - mean) / std, mean
 
-    def trade_osmium(self, state: TradingState, orders: List[Order]):
-        product = self.PRODUCT
-        order_book: OrderDepth = state.order_depths[product]
-        sell_orders = order_book.sell_orders
-        buy_orders = order_book.buy_orders
-
-        if not sell_orders or not buy_orders:
+    def trade(self, state, orders):
+        od = state.order_depths[self.PRODUCT]
+        mid = self.get_mid_price(od)
+        if mid is None:
             return
 
-        best_ask = min(sell_orders.keys())
-        best_ask_volume = sell_orders[best_ask]  # negative in the book
-        best_bid = max(buy_orders.keys())
-        best_bid_volume = buy_orders[best_bid]   # positive in the book
-        mid_price = (best_ask + best_bid) / 2
+        self.update_mid_history(mid)
+        z, mean = self.get_zscore(mid)
 
-        # Record current mid price in running history
-        self.price_history.append(mid_price)
-
-        # Need at least a few observations before trading on percentiles
-        if len(self.price_history) < 10:
-            return
-
-        sorted_prices = sorted(self.price_history)
-        n = len(sorted_prices)
-        p25 = sorted_prices[int(n * 0.25)]
-        p75 = sorted_prices[int(n * 0.75)]
+        best_bid = max(od.buy_orders.keys())
+        best_ask = min(od.sell_orders.keys())
 
         max_buy = self.POSITION_LIMIT - self.position
-        max_sell = self.position + self.POSITION_LIMIT
+        max_sell = self.POSITION_LIMIT + self.position
 
-        # Price below 25th percentile → buy
-        if mid_price < p25:
-            # Aggressive: take best ask
-            aggressive_vol = min(-best_ask_volume, max_buy)
-            if aggressive_vol > 0:
-                orders.append(Order(product, best_ask, aggressive_vol))
-                max_buy -= aggressive_vol
-            # Passive: quote one tick inside the spread
-            passive_vol = min(8, max_buy)
-            if passive_vol > 0:
-                orders.append(Order(product, best_bid + 1, passive_vol))
+        # ── Mean reversion: aggressive entry ──────────────────────────────────
+        if z < -self.ENTRY_Z:
+            # Price unusually low → buy, but only up to position limit
+            for ask, vol in sorted(od.sell_orders.items()):
+                if max_buy <= 0:
+                    break
+                if ask <= mean:
+                    size = min(-vol, max_buy)
+                    self.send_buy_order(orders, self.PRODUCT, ask, size)
+                    max_buy -= size
 
-        # Price above 75th percentile → sell
-        if mid_price > p75:
-            # Aggressive: hit best bid
-            aggressive_vol = min(best_bid_volume, max_sell)
-            if aggressive_vol > 0:
-                orders.append(Order(product, best_bid, -aggressive_vol))
-                max_sell -= aggressive_vol
-            # Passive: quote one tick inside the spread
-            passive_vol = min(8, max_sell)
-            if passive_vol > 0:
-                orders.append(Order(product, best_ask - 1, -passive_vol))
+        elif z > self.ENTRY_Z:
+            # Price unusually high → sell, but only up to position limit
+            for bid, vol in sorted(od.buy_orders.items(), reverse=True):
+                if max_sell <= 0:
+                    break
+                if bid >= mean:
+                    size = min(vol, max_sell)
+                    self.send_sell_order(orders, self.PRODUCT, bid, -size)
+                    max_sell -= size
+
+        # ── EXIT_Z: close existing position when price reverts ────────────────
+        # If long and z has recovered above -EXIT_Z, start selling to flatten
+        elif self.position > 0 and z > -self.EXIT_Z:
+            for bid, vol in sorted(od.buy_orders.items(), reverse=True):
+                if max_sell <= 0:
+                    break
+                size = min(vol, self.position, max_sell)
+                if size > 0:
+                    self.send_sell_order(orders, self.PRODUCT, bid, -size)
+                    max_sell -= size
+
+        # If short and z has recovered below +EXIT_Z, start buying to flatten
+        elif self.position < 0 and z < self.EXIT_Z:
+            for ask, vol in sorted(od.sell_orders.items()):
+                if max_buy <= 0:
+                    break
+                size = min(-vol, -self.position, max_buy)
+                if size > 0:
+                    self.send_buy_order(orders, self.PRODUCT, ask, size)
+                    max_buy -= size
+
+        # ── Passive market making ─────────────────────────────────────────────
+        fair = mean
+        bid_price = min(best_bid + 1, int(fair - self.BASE_QUOTE_OFFSET))
+        ask_price = max(best_ask - 1, int(fair + self.BASE_QUOTE_OFFSET))
+
+        if max_buy > 0:
+            self.send_buy_order(orders, self.PRODUCT, bid_price, min(10, max_buy))
+        if max_sell > 0:
+            self.send_sell_order(orders, self.PRODUCT, ask_price, -min(10, max_sell))
 
     def run(self, state: TradingState):
         result: Dict[str, List[Order]] = {}
 
-        # Restore price history from previous ticks
-        if state.traderData:
-            try:
-                saved = json.loads(state.traderData)
-                self.price_history = saved.get("price_history", [])
-            except Exception:
-                self.price_history = []
+        self.position = self.get_product_pos(state, self.PRODUCT)
+        self.load_history(state)
 
         for product, order_depth in state.order_depths.items():
             orders: List[Order] = []
@@ -168,12 +147,8 @@ class Trader:
                 continue
 
             if product == self.PRODUCT:
-                self.position = self.get_product_pos(state, product)
-                self.buy_orders_sent = 0
-                self.sell_orders_sent = 0
-                self.trade_osmium(state, orders)
+                self.trade(state, orders)
 
             result[product] = orders
 
-        trader_data = json.dumps({"price_history": self.price_history})
-        return result, 0, trader_data
+        return result, 0, self.save_history()
