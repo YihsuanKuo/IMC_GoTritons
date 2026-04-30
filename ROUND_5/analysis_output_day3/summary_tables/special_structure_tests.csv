@@ -1,0 +1,14 @@
+group,test,mean,std,min,max,comment
+Construction Panels,same_area_PANEL_2X2_minus_PANEL_1X4,534.4666,887.2081479642877,-1096.5,2462.5,"If stable around 0, these two may form a clean pair trade."
+Purification Pebbles,adjacent_spread_PEBBLES_S_minus_PEBBLES_XS,2229.10695,721.8125395287335,526.5,3745.0,Check whether adjacent product spread is stable or mean-reverting.
+Purification Pebbles,adjacent_spread_PEBBLES_M_minus_PEBBLES_S,972.9756,843.6307410457277,-736.0,2772.0,Check whether adjacent product spread is stable or mean-reverting.
+Purification Pebbles,adjacent_spread_PEBBLES_L_minus_PEBBLES_M,30.9609,757.9075996215809,-1472.0,1841.0,Check whether adjacent product spread is stable or mean-reverting.
+Purification Pebbles,adjacent_spread_PEBBLES_XL_minus_PEBBLES_L,3260.64285,970.7839961729901,896.5,5920.5,Check whether adjacent product spread is stable or mean-reverting.
+UV-Visors,adjacent_spread_UV_VISOR_AMBER_minus_UV_VISOR_YELLOW,-3735.9373,389.2833218482098,-4797.0,-2976.0,Check whether adjacent product spread is stable or mean-reverting.
+UV-Visors,adjacent_spread_UV_VISOR_ORANGE_minus_UV_VISOR_AMBER,2901.3282,411.28691558017346,1634.0,3575.0,Check whether adjacent product spread is stable or mean-reverting.
+UV-Visors,adjacent_spread_UV_VISOR_RED_minus_UV_VISOR_ORANGE,49.9587,345.2307539482211,-709.5,861.0,Check whether adjacent product spread is stable or mean-reverting.
+UV-Visors,adjacent_spread_UV_VISOR_MAGENTA_minus_UV_VISOR_RED,734.2175,452.67755614867195,-91.0,1741.5,Check whether adjacent product spread is stable or mean-reverting.
+Construction Panels,adjacent_spread_PANEL_2X2_minus_PANEL_1X2,1886.1342,625.4850965458411,242.0,2715.0,Check whether adjacent product spread is stable or mean-reverting.
+Construction Panels,adjacent_spread_PANEL_1X4_minus_PANEL_2X2,-534.4666,887.2081479642877,-2462.5,1096.5,Check whether adjacent product spread is stable or mean-reverting.
+Construction Panels,adjacent_spread_PANEL_2X4_minus_PANEL_1X4,1574.3294,1071.269025841881,-384.5,3452.5,Check whether adjacent product spread is stable or mean-reverting.
+Construction Panels,adjacent_spread_PANEL_4X4_minus_PANEL_2X4,-1658.88745,471.57196345750816,-2688.0,-779.0,Check whether adjacent product spread is stable or mean-reverting.
