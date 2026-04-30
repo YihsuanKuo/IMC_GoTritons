@@ -1,0 +1,46 @@
+# PEBBLES_XS / PEBBLES_L Diagnosis Report
+
+## What to inspect first
+
+1. `baseline_cycle_summary.csv`: good vs bad baseline cycles.
+
+2. `entry_feature_summary_by_outcome.csv`: market features that separate winners from losers.
+
+3. `filter_grid_results.csv`: legal signal filters ranked by robustness.
+
+4. `charts/day*_zscore_entries.png`: visual inspection of entries and z-score behavior.
+
+
+## Baseline cycle overview
+
+            direction_name  trades  total_profit_units  win_rate  avg_duration_bars  avg_entry_drift_z  avg_entry_accel_z
+ LONG_SPREAD_buy_XS_sell_L      63          -334.14037  0.603175         131.936508          -0.472377          -0.622514
+SHORT_SPREAD_sell_XS_buy_L      60          2908.66303  0.766667         100.500000           0.478152           0.725675
+
+
+
+## Top signal-filter candidates
+
+ entry_z  exit_z drift_limit adverse_z_stop max_hold_bars  require_turn  total_profit_units  num_trades  win_rate  avg_profit_units  max_drawdown_units  short_trade_profit  long_trade_profit  robust_score
+     2.0     0.3        None            0.5           180          True         5367.525952         158  0.588608         33.971683          639.456958         3717.348647        1650.177305   4887.933234
+     2.0     0.4        None            0.5           180          True         4929.363213         159  0.591195         31.002284          672.064005         3470.093425        1459.269788   4425.315209
+     1.8     0.3        None            0.5           180          True         4786.933398         204  0.519608         23.465360          663.718650         3767.696715        1019.236683   4289.144410
+     2.0     0.3        None            0.8           180          True         4786.313627         133  0.669173         35.987321          758.689520         3568.179727        1218.133900   4217.296487
+     2.0     0.5        None            0.5           180          True         4718.026025         162  0.604938         29.123617          747.666933         3505.715037        1212.310988   4157.275826
+     2.0     0.3        None            1.1           180          True         4726.323855         120  0.716667         39.386032          781.520818         3442.091220        1284.232635   4140.183242
+     1.8     0.5        None            0.5           180          True         4565.417063         209  0.545455         21.844101          715.981895         3807.886162         757.530900   4028.430641
+     2.0     0.4        None            0.8           180          True         4415.348430         134  0.671642         32.950361          791.296568         3320.924505        1094.423925   3821.876004
+     1.8     0.4        None            0.5           180          True         4227.859093         205  0.521951         20.623703          671.202170         3438.591655         789.267438   3724.457465
+     2.0     0.4        None            1.1           180          True         4302.988293         122  0.713115         35.270396          814.127865         3194.835997        1108.152295   3692.392394
+     2.0     0.3        None            0.5          None          True         4501.348430         149  0.577181         30.210392         1112.002423         3444.916337        1056.432093   3667.346613
+     2.0     0.3        None           None           180          True         4286.548105         110  0.736364         38.968619          840.878823         3361.422517         925.125587   3655.888988
+     2.0     0.4        None            0.5          None          True         4454.389412         153  0.581699         29.113656         1162.615650         3408.191942        1046.197470   3582.427675
+     2.0     0.5        None            0.8           180          True         4221.435095         137  0.664234         30.813395          866.899495         3395.188113         826.246982   3571.260474
+     2.0     0.5        None            0.5          None          True         4501.550455         158  0.601266         28.490826         1247.839973         3414.120277        1087.430178   3565.670476
+
+
+
+## Important note
+
+This diagnosis intentionally avoids timestamp cutoffs, PnL locks, and short-only assumptions. 
+The purpose is to discover market-state rules that can generalize.
