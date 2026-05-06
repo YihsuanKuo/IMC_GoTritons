@@ -83,6 +83,52 @@ def main() -> None:
 
     plot_path = Path(args.output_dir) / "pnl_curve.png"
     plt.savefig(plot_path, dpi=150)
+    plt.close()
+
+    # Plot midprice and position for each product
+    products = sorted(
+        {
+            col.replace("mid_", "")
+            for col in df.columns
+            if col.startswith("mid_")
+        }
+    )
+
+    for product in products:
+        mid_col = f"mid_{product}"
+        pos_col = f"pos_{product}"
+
+        if mid_col not in df.columns or pos_col not in df.columns:
+            continue
+
+        fig, ax1 = plt.subplots(figsize=(10, 5))
+
+        ax1.plot(df["timestamp"], df[mid_col], label=f"{product} Midprice")
+        ax1.set_xlabel("Timestamp")
+        ax1.set_ylabel("Midprice")
+        ax1.set_title(f"{product}: Midprice and Position Over Time")
+        ax1.grid(True)
+
+        ax2 = ax1.twinx()
+        ax2.plot(
+            df["timestamp"],
+            df[pos_col],
+            linestyle="--",
+            label=f"{product} Position",
+            color = "red"
+        )
+        ax2.set_ylabel("Position")
+
+        lines1, labels1 = ax1.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        ax1.legend(lines1 + lines2, labels1 + labels2, loc="best")
+
+        fig.tight_layout()
+        fig.savefig(
+            Path(args.output_dir) / f"{product.lower()}_midprice_position.png",
+            dpi=150,
+        )
+        plt.close(fig)
 
 
 if __name__ == "__main__":
