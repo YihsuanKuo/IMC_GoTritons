@@ -54,9 +54,7 @@ class VelvetfruitStrategy:
         self.mid_history = data.get("mid_history", [])
 
     def save_state(self):
-        return {
-            "mid_history": self.mid_history[-self.HISTORY_LENGTH:]
-        }
+        return {"mid_history": self.mid_history[-self.HISTORY_LENGTH :]}
 
     def get_mid_price(self, od):
         if not od.buy_orders or not od.sell_orders:
@@ -73,7 +71,7 @@ class VelvetfruitStrategy:
     def avg_last(self, n):
         if not self.mid_history:
             return self.BASE_FAIR
-        vals = self.mid_history[-min(n, len(self.mid_history)):]
+        vals = self.mid_history[-min(n, len(self.mid_history)) :]
         return sum(vals) / len(vals)
 
     def get_center(self):
@@ -82,11 +80,7 @@ class VelvetfruitStrategy:
 
         # Stronger anchor than v1/v2.
         # v2 failed because it followed rolling trend too much.
-        center = (
-            0.55 * self.BASE_FAIR
-            + 0.20 * short_mean
-            + 0.25 * long_mean
-        )
+        center = 0.55 * self.BASE_FAIR + 0.20 * short_mean + 0.25 * long_mean
 
         center -= self.INVENTORY_SKEW * self.position
         return center
@@ -100,7 +94,9 @@ class VelvetfruitStrategy:
         if len(self.mid_history) < 5:
             return 0, 0
 
-        recent = self.mid_history[-min(self.REGIME_WINDOW, len(self.mid_history)):]
+        recent = self.mid_history[
+            -min(self.REGIME_WINDOW, len(self.mid_history)) :
+        ]
         high = max(recent)
         low = min(recent)
         mid = self.mid_history[-1]
@@ -162,11 +158,21 @@ class VelvetfruitStrategy:
         # 0. Emergency inventory control
         # ------------------------------------------------
         if self.position > self.DANGER_LEVEL:
-            self.sell(orders, best_bid, min(self.UNWIND_SIZE, self.position), use_soft=False)
+            self.sell(
+                orders,
+                best_bid,
+                min(self.UNWIND_SIZE, self.position),
+                use_soft=False,
+            )
             return
 
         if self.position < -self.DANGER_LEVEL:
-            self.buy(orders, best_ask, min(self.UNWIND_SIZE, -self.position), use_soft=False)
+            self.buy(
+                orders,
+                best_ask,
+                min(self.UNWIND_SIZE, -self.position),
+                use_soft=False,
+            )
             return
 
         # ------------------------------------------------
@@ -175,25 +181,37 @@ class VelvetfruitStrategy:
         # For longs bought in lower bands, exit around center / upper center.
         if self.position > 25:
             if best_bid >= max(center + 8, 5264):
-                self.sell(orders, best_bid, min(34, self.position), use_soft=False)
+                self.sell(
+                    orders, best_bid, min(34, self.position), use_soft=False
+                )
                 return
             elif best_bid >= max(center + 4, 5258):
-                self.sell(orders, best_bid, min(20, self.position), use_soft=False)
+                self.sell(
+                    orders, best_bid, min(20, self.position), use_soft=False
+                )
                 return
             elif best_bid >= 5254 and self.position > 70:
-                self.sell(orders, best_bid, min(16, self.position), use_soft=False)
+                self.sell(
+                    orders, best_bid, min(16, self.position), use_soft=False
+                )
                 return
 
         # For shorts opened in upper bands, cover around center / lower center.
         if self.position < -25:
             if best_ask <= min(center - 8, 5244):
-                self.buy(orders, best_ask, min(34, -self.position), use_soft=False)
+                self.buy(
+                    orders, best_ask, min(34, -self.position), use_soft=False
+                )
                 return
             elif best_ask <= min(center - 4, 5250):
-                self.buy(orders, best_ask, min(20, -self.position), use_soft=False)
+                self.buy(
+                    orders, best_ask, min(20, -self.position), use_soft=False
+                )
                 return
             elif best_ask <= 5256 and self.position < -70:
-                self.buy(orders, best_ask, min(16, -self.position), use_soft=False)
+                self.buy(
+                    orders, best_ask, min(16, -self.position), use_soft=False
+                )
                 return
 
         # ------------------------------------------------
@@ -253,14 +271,18 @@ class VelvetfruitStrategy:
         if can_add_short:
             if sell_edge >= self.EXTREME_EDGE:
                 if trend < 16 or drop_from_high >= 4:
-                    for bid, vol in sorted(od.buy_orders.items(), reverse=True):
+                    for bid, vol in sorted(
+                        od.buy_orders.items(), reverse=True
+                    ):
                         if bid >= center + self.EXTREME_EDGE:
                             self.sell(orders, bid, min(vol, self.BIG_SIZE))
                             break
 
             elif sell_edge >= self.BIG_EDGE and mid > center + 8:
                 if trend < 10 or drop_from_high >= 3:
-                    for bid, vol in sorted(od.buy_orders.items(), reverse=True):
+                    for bid, vol in sorted(
+                        od.buy_orders.items(), reverse=True
+                    ):
                         if bid >= center + self.BIG_EDGE:
                             self.sell(orders, bid, min(vol, self.NORMAL_SIZE))
                             break
@@ -368,17 +390,17 @@ class HydrogelPackStrategy:
     def __init__(self):
         self.position = 0
         self.mid_history = []
-        self.last_long_tp_time = -10**9
-        self.last_short_tp_time = -10**9
+        self.last_long_tp_time = -(10**9)
+        self.last_short_tp_time = -(10**9)
 
     def load_state(self, data):
         self.mid_history = data.get("mid_history", [])
-        self.last_long_tp_time = data.get("last_long_tp_time", -10**9)
-        self.last_short_tp_time = data.get("last_short_tp_time", -10**9)
+        self.last_long_tp_time = data.get("last_long_tp_time", -(10**9))
+        self.last_short_tp_time = data.get("last_short_tp_time", -(10**9))
 
     def save_state(self):
         return {
-            "mid_history": self.mid_history[-self.HISTORY_LENGTH:],
+            "mid_history": self.mid_history[-self.HISTORY_LENGTH :],
             "last_long_tp_time": self.last_long_tp_time,
             "last_short_tp_time": self.last_short_tp_time,
         }
@@ -413,18 +435,14 @@ class HydrogelPackStrategy:
     def avg_last(self, n):
         if not self.mid_history:
             return self.BASE_FAIR
-        vals = self.mid_history[-min(n, len(self.mid_history)):]
+        vals = self.mid_history[-min(n, len(self.mid_history)) :]
         return sum(vals) / len(vals)
 
     def get_fair(self):
         short_mean = self.avg_last(self.SHORT_WINDOW)
         long_mean = self.avg_last(self.LONG_WINDOW)
 
-        fair = (
-            0.50 * self.BASE_FAIR
-            + 0.25 * short_mean
-            + 0.25 * long_mean
-        )
+        fair = 0.50 * self.BASE_FAIR + 0.25 * short_mean + 0.25 * long_mean
 
         fair -= self.INVENTORY_SKEW * self.position
         return fair
@@ -438,7 +456,9 @@ class HydrogelPackStrategy:
         if len(self.mid_history) < 5:
             return 0, 0
 
-        recent = self.mid_history[-min(self.REGIME_WINDOW, len(self.mid_history)):]
+        recent = self.mid_history[
+            -min(self.REGIME_WINDOW, len(self.mid_history)) :
+        ]
         recent_high = max(recent)
         recent_low = min(recent)
         mid = self.mid_history[-1]
@@ -500,91 +520,149 @@ class HydrogelPackStrategy:
         buy_edge = fair - best_ask
         sell_edge = best_bid - fair
 
-        in_long_tp_cooldown = timestamp - self.last_long_tp_time < self.TP_COOLDOWN
-        in_short_tp_cooldown = timestamp - self.last_short_tp_time < self.TP_COOLDOWN
+        in_long_tp_cooldown = (
+            timestamp - self.last_long_tp_time < self.TP_COOLDOWN
+        )
+        in_short_tp_cooldown = (
+            timestamp - self.last_short_tp_time < self.TP_COOLDOWN
+        )
 
         if self.position > self.DANGER_LEVEL:
             if best_bid >= fair - 15:
-                self.sell(orders, best_bid, min(self.UNWIND_SIZE, self.position), use_soft=False)
+                self.sell(
+                    orders,
+                    best_bid,
+                    min(self.UNWIND_SIZE, self.position),
+                    use_soft=False,
+                )
                 return
 
         if self.position < -self.DANGER_LEVEL:
             if best_ask <= fair + 15:
-                self.buy(orders, best_ask, min(self.UNWIND_SIZE, -self.position), use_soft=False)
+                self.buy(
+                    orders,
+                    best_ask,
+                    min(self.UNWIND_SIZE, -self.position),
+                    use_soft=False,
+                )
                 return
 
         if self.position > 25:
             if best_bid >= self.LONG_TP_2:
-                self.sell(orders, best_bid, min(35, self.position), use_soft=False)
+                self.sell(
+                    orders, best_bid, min(35, self.position), use_soft=False
+                )
                 self.last_long_tp_time = timestamp
                 return
             elif best_bid >= self.LONG_TP_1:
-                self.sell(orders, best_bid, min(22, self.position), use_soft=False)
+                self.sell(
+                    orders, best_bid, min(22, self.position), use_soft=False
+                )
                 self.last_long_tp_time = timestamp
                 return
             elif best_bid >= fair + 12:
-                self.sell(orders, best_bid, min(20, self.position), use_soft=False)
+                self.sell(
+                    orders, best_bid, min(20, self.position), use_soft=False
+                )
                 self.last_long_tp_time = timestamp
                 return
 
         if self.position < -25:
             if best_ask <= self.SHORT_TP_2:
-                self.buy(orders, best_ask, min(35, -self.position), use_soft=False)
+                self.buy(
+                    orders, best_ask, min(35, -self.position), use_soft=False
+                )
                 self.last_short_tp_time = timestamp
                 return
             elif best_ask <= self.SHORT_TP_1:
-                self.buy(orders, best_ask, min(22, -self.position), use_soft=False)
+                self.buy(
+                    orders, best_ask, min(22, -self.position), use_soft=False
+                )
                 self.last_short_tp_time = timestamp
                 return
             elif best_ask <= fair - 12:
-                self.buy(orders, best_ask, min(20, -self.position), use_soft=False)
+                self.buy(
+                    orders, best_ask, min(20, -self.position), use_soft=False
+                )
                 self.last_short_tp_time = timestamp
                 return
 
         if in_long_tp_cooldown and self.position > 0:
             if best_bid >= 9978:
-                self.sell(orders, best_bid, min(12, self.position), use_soft=False)
+                self.sell(
+                    orders, best_bid, min(12, self.position), use_soft=False
+                )
                 return
 
         if in_short_tp_cooldown and self.position < 0:
             if best_ask <= 9985:
-                self.buy(orders, best_ask, min(12, -self.position), use_soft=False)
+                self.buy(
+                    orders, best_ask, min(12, -self.position), use_soft=False
+                )
                 return
 
-        rebound_confirmed = rise_from_low >= self.REBOUND_CONFIRM or micro_signal >= self.MICRO_CONFIRM
-        pullback_confirmed = drop_from_high >= self.REBOUND_CONFIRM or micro_signal <= -self.MICRO_CONFIRM
+        rebound_confirmed = (
+            rise_from_low >= self.REBOUND_CONFIRM
+            or micro_signal >= self.MICRO_CONFIRM
+        )
+        pullback_confirmed = (
+            drop_from_high >= self.REBOUND_CONFIRM
+            or micro_signal <= -self.MICRO_CONFIRM
+        )
 
         allow_deep_rebuy_after_cooldown = (
-            (best_ask <= self.DEEP_REBUY_LEVEL or buy_edge >= self.EXTREME_EDGE + 8)
+            (
+                best_ask <= self.DEEP_REBUY_LEVEL
+                or buy_edge >= self.EXTREME_EDGE + 8
+            )
             and rebound_confirmed
             and trend > -10
         )
 
         allow_deep_reshort_after_cooldown = (
-            (best_bid >= self.DEEP_RESHORT_LEVEL or sell_edge >= self.EXTREME_EDGE + 8)
+            (
+                best_bid >= self.DEEP_RESHORT_LEVEL
+                or sell_edge >= self.EXTREME_EDGE + 8
+            )
             and pullback_confirmed
             and trend < 10
         )
 
-        block_long_after_tp = in_long_tp_cooldown and not allow_deep_rebuy_after_cooldown
-        block_short_after_tp = in_short_tp_cooldown and not allow_deep_reshort_after_cooldown
+        block_long_after_tp = (
+            in_long_tp_cooldown and not allow_deep_rebuy_after_cooldown
+        )
+        block_short_after_tp = (
+            in_short_tp_cooldown and not allow_deep_reshort_after_cooldown
+        )
 
-        can_add_long = self.position < self.NO_ADD_LEVEL and not block_long_after_tp
-        can_add_short = self.position > -self.NO_ADD_LEVEL and not block_short_after_tp
+        can_add_long = (
+            self.position < self.NO_ADD_LEVEL and not block_long_after_tp
+        )
+        can_add_short = (
+            self.position > -self.NO_ADD_LEVEL and not block_short_after_tp
+        )
 
         # Controlled cooldown re-entry:
         # After taking profit, the old version can become too inactive.
         # This permits only small re-entry when price is meaningfully dislocated
         # AND micro/regime confirms a rebound/pullback.
         if in_long_tp_cooldown and self.position < 25:
-            if buy_edge >= self.BIG_EDGE + 12 and rebound_confirmed and trend > -8:
+            if (
+                buy_edge >= self.BIG_EDGE + 12
+                and rebound_confirmed
+                and trend > -8
+            ):
                 for ask, vol in sorted(od.sell_orders.items()):
                     if ask <= fair - (self.BIG_EDGE + 8):
                         self.buy(orders, ask, min(-vol, 8))
                         return
 
         if in_short_tp_cooldown and self.position > -25:
-            if sell_edge >= self.BIG_EDGE + 12 and pullback_confirmed and trend < 8:
+            if (
+                sell_edge >= self.BIG_EDGE + 12
+                and pullback_confirmed
+                and trend < 8
+            ):
                 for bid, vol in sorted(od.buy_orders.items(), reverse=True):
                     if bid >= fair + (self.BIG_EDGE + 8):
                         self.sell(orders, bid, min(vol, 8))
@@ -607,13 +685,17 @@ class HydrogelPackStrategy:
         if can_add_short:
             if sell_edge >= self.EXTREME_EDGE:
                 if trend < 25 or micro_signal <= -self.MICRO_CONFIRM:
-                    for bid, vol in sorted(od.buy_orders.items(), reverse=True):
+                    for bid, vol in sorted(
+                        od.buy_orders.items(), reverse=True
+                    ):
                         if bid >= fair + self.EXTREME_EDGE:
                             self.sell(orders, bid, min(vol, self.BIG_SIZE))
                             break
             elif sell_edge >= self.BIG_EDGE:
                 if trend < 12 and micro_signal < 1.5:
-                    for bid, vol in sorted(od.buy_orders.items(), reverse=True):
+                    for bid, vol in sorted(
+                        od.buy_orders.items(), reverse=True
+                    ):
                         if bid >= fair + self.BIG_EDGE:
                             self.sell(orders, bid, min(vol, self.NORMAL_SIZE))
                             break
@@ -668,20 +750,32 @@ class HydrogelPackStrategy:
 
         if abs(trend) > 35:
             if trend < 0 and self.position > 0 and best_bid >= 9968:
-                self.sell(orders, best_bid, min(8, self.position), use_soft=False)
+                self.sell(
+                    orders, best_bid, min(8, self.position), use_soft=False
+                )
             elif trend > 0 and self.position < 0 and best_ask <= 9992:
-                self.buy(orders, best_ask, min(8, -self.position), use_soft=False)
+                self.buy(
+                    orders, best_ask, min(8, -self.position), use_soft=False
+                )
             return
 
         # Micro exhaustion rescue:
         # If we hold inventory and price/micro moves favorably, release a small piece
         # before returning to normal light MM. This tries to reduce late drawdown
         # without changing the core entry rules.
-        if self.position > 45 and micro_signal <= -self.MICRO_CONFIRM and best_bid >= fair - 8:
+        if (
+            self.position > 45
+            and micro_signal <= -self.MICRO_CONFIRM
+            and best_bid >= fair - 8
+        ):
             self.sell(orders, best_bid, min(10, self.position), use_soft=False)
             return
 
-        if self.position < -45 and micro_signal >= self.MICRO_CONFIRM and best_ask <= fair + 8:
+        if (
+            self.position < -45
+            and micro_signal >= self.MICRO_CONFIRM
+            and best_ask <= fair + 8
+        ):
             self.buy(orders, best_ask, min(10, -self.position), use_soft=False)
             return
 
@@ -715,7 +809,7 @@ class HydrogelPackStrategy:
         self.load_state(state)
 
         if self.PRODUCT in state.order_depths:
-            self.trade_pack(state, result[self.PRODUCT])
+            self.trade(state, result[self.PRODUCT])
 
         return result, 0, self.save_state()
 
@@ -1049,10 +1143,14 @@ class VEVoucherStrategy:
             return max(0.0, S - K)
 
         sqrt_t = math.sqrt(T)
-        d1 = (math.log(S / K) + (r + 0.5 * sigma * sigma) * T) / (sigma * sqrt_t)
+        d1 = (math.log(S / K) + (r + 0.5 * sigma * sigma) * T) / (
+            sigma * sqrt_t
+        )
         d2 = d1 - sigma * sqrt_t
 
-        return S * self.normal_cdf(d1) - K * math.exp(-r * T) * self.normal_cdf(d2)
+        return S * self.normal_cdf(d1) - K * math.exp(
+            -r * T
+        ) * self.normal_cdf(d2)
 
     def normal_cdf(self, x: float) -> float:
         return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
@@ -1086,7 +1184,9 @@ class VEVoucherStrategy:
             return None
         return min(order_depth.sell_orders.keys())
 
-    def get_mid_price(self, state: TradingState, product: str) -> Optional[float]:
+    def get_mid_price(
+        self, state: TradingState, product: str
+    ) -> Optional[float]:
         if product not in state.order_depths:
             return None
 
@@ -1119,6 +1219,7 @@ class VEVoucherStrategy:
 # order size to visible top-level volume so no large residual order rests
 # at a bad price.
 
+
 def _best_bid_px_vol(order_depth: OrderDepth):
     if not order_depth.buy_orders:
         return None, 0
@@ -1137,19 +1238,21 @@ class Mark14HPSignal:
     PRODUCT = "HYDROGEL_PACK"
 
     # Signal extraction controls
-    LOOKBACK = 300       # wider than 100 so we can verify whether Mark14 is actually visible
-    TTL = 1500           # how long the last Mark14 direction stays active
-    MIN_ABS_FLOW = 1     # minimum net Mark14 quantity required to refresh direction
+    LOOKBACK = 500  # wider than 100 so we can verify whether Mark14 is actually visible
+    TTL = 2500  # how long the last Mark14 direction stays active
+    MIN_ABS_FLOW = (
+        1  # minimum net Mark14 quantity required to refresh direction
+    )
 
     # Execution controls
-    MAX_CHASE = 4        # diagnostic version: not as tight as 2, but still blocks bad chasing
-    TARGET = 70          # tactical target, not full-position Olivia mode
-    CLIP = 10            # never send more than first-level visible volume / this cap
+    MAX_CHASE = 6  # diagnostic version: not as tight as 2, but still blocks bad chasing
+    TARGET = 120  # tactical target, not full-position Olivia mode
+    CLIP = 20  # never send more than first-level visible volume / this cap
 
     def __init__(self):
-        self.direction = 0       # +1 BUY, -1 SELL, 0 none
-        self.price = None        # recent Mark14 VWAP for HP
-        self.time = -10**9
+        self.direction = 0  # +1 BUY, -1 SELL, 0 none
+        self.price = None  # recent Mark14 VWAP for HP
+        self.time = -(10**9)
         self.last_flow = 0
 
         # Diagnostics: these are persisted in traderData.
@@ -1157,12 +1260,12 @@ class Mark14HPSignal:
 
     def _empty_diag(self):
         return {
-            "seen_ticks": 0,          # ticks where any recent Mark14 HP trade was visible
-            "seen_buy_qty": 0,        # total Mark14 buy qty observed
-            "seen_sell_qty": 0,       # total Mark14 sell qty observed
-            "signal_refreshes": 0,    # times direction was refreshed by Mark14 flow
-            "active_ticks": 0,        # ticks where stored signal was active after update
-            "orders_sent": 0,         # Mark14 module actually sent an order
+            "seen_ticks": 0,  # ticks where any recent Mark14 HP trade was visible
+            "seen_buy_qty": 0,  # total Mark14 buy qty observed
+            "seen_sell_qty": 0,  # total Mark14 sell qty observed
+            "signal_refreshes": 0,  # times direction was refreshed by Mark14 flow
+            "active_ticks": 0,  # ticks where stored signal was active after update
+            "orders_sent": 0,  # Mark14 module actually sent an order
             "buy_orders_sent": 0,
             "sell_orders_sent": 0,
             "reject_inactive": 0,
@@ -1181,7 +1284,7 @@ class Mark14HPSignal:
     def load_state(self, data):
         self.direction = int(data.get("direction", 0))
         self.price = data.get("price", None)
-        self.time = int(data.get("time", -10**9))
+        self.time = int(data.get("time", -(10**9)))
         self.last_flow = int(data.get("last_flow", 0))
         old_diag = data.get("diag", {})
         self.diag = self._empty_diag()
@@ -1211,7 +1314,10 @@ class Mark14HPSignal:
         buy_qty = 0
         sell_qty = 0
 
-        for source in (getattr(state, "market_trades", {}) or {}, getattr(state, "own_trades", {}) or {}):
+        for source in (
+            getattr(state, "market_trades", {}) or {},
+            getattr(state, "own_trades", {}) or {},
+        ):
             for trade in source.get(self.PRODUCT, []):
                 ts = getattr(trade, "timestamp", now)
                 if abs(ts - now) > self.LOOKBACK:
@@ -1257,7 +1363,9 @@ class Mark14HPSignal:
             and state.timestamp - self.time <= self.TTL
         )
 
-    def trade(self, state: TradingState, result: Dict[str, List[Order]]) -> bool:
+    def trade(
+        self, state: TradingState, result: Dict[str, List[Order]]
+    ) -> bool:
         """Return True only when this module actually sends a Mark14 tactical order.
 
         Diagnostics distinguish four cases:
@@ -1303,7 +1411,9 @@ class Mark14HPSignal:
             desired = self.TARGET - pos
             qty = min(desired, ask_vol, self.CLIP)
             if qty > 0:
-                result[self.PRODUCT].append(Order(self.PRODUCT, int(ask), int(qty)))
+                result[self.PRODUCT].append(
+                    Order(self.PRODUCT, int(ask), int(qty))
+                )
                 self.diag["orders_sent"] += 1
                 self.diag["buy_orders_sent"] += 1
                 self.diag["last_reason"] = "ORDER_BUY"
@@ -1327,7 +1437,9 @@ class Mark14HPSignal:
             desired = pos + self.TARGET
             qty = min(desired, bid_vol, self.CLIP)
             if qty > 0:
-                result[self.PRODUCT].append(Order(self.PRODUCT, int(bid), -int(qty)))
+                result[self.PRODUCT].append(
+                    Order(self.PRODUCT, int(bid), -int(qty))
+                )
                 self.diag["orders_sent"] += 1
                 self.diag["sell_orders_sent"] += 1
                 self.diag["last_reason"] = "ORDER_SELL"
@@ -1340,6 +1452,7 @@ class Mark14HPSignal:
         self.diag["reject_inactive"] += 1
         self.diag["last_reason"] = "ZERO_DIRECTION"
         return False
+
 
 class Trader:
     def __init__(self):
@@ -1363,12 +1476,14 @@ class Trader:
             self.mark14_hp.load_state({})
 
     def save_state(self):
-        return json.dumps({
-            "VELVETFRUIT_EXTRACT": self.ve.save_state(),
-            "HYDROGEL_PACK": self.hp.save_state(),
-            "VEVOUCHERS": {},
-            "MARK14_HP": self.mark14_hp.save_state(),
-        })
+        return json.dumps(
+            {
+                "VELVETFRUIT_EXTRACT": self.ve.save_state(),
+                "HYDROGEL_PACK": self.hp.save_state(),
+                "VEVOUCHERS": {},
+                "MARK14_HP": self.mark14_hp.save_state(),
+            }
+        )
 
     def run(self, state: TradingState):
         result = {
@@ -1429,6 +1544,9 @@ class Trader:
                 "ask": d.get("last_best_ask"),
                 "flow": d.get("last_flow"),
             }
-            print("MARK14_HP_DIAG", json.dumps(compact_diag, separators=(",", ":")))
+            print(
+                "MARK14_HP_DIAG",
+                json.dumps(compact_diag, separators=(",", ":")),
+            )
 
         return result, 0, self.save_state()
