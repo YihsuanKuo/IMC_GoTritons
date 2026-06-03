@@ -1,6 +1,6 @@
 # IMC Prosperity 4 Go Tritons!!!
 ## Round 1 
-### Algorithmic trading 
+### Algorithmic Trading 
 
 ### Manual Trading
 According to the auction rules, we can writing the following formulas for Dryland flax, where q is the quantity we are buying. We do not consider selling because the auction rules trivially make selling a loss. 
@@ -34,7 +34,7 @@ $$
 Then, we can optimize the price q by buying q=9999 at P=30 or q=4999 at P=28, because it will result in the order of bid price P=28, volume=40k. To optimize q, we can just buy q=9999 at P=30. Same strategy can be applied to Ember Mushroom even though the order book is slightly more complicated (we bought q=19999 ember mushrooms at price=20). In this way, it turns out to be a math problem with a correct answer, and we also get full pnl for this.
 
 ## Round 2
-### Algorithmic trading 
+### Algorithmic Trading 
 
 ### Manual Trading
 According to the rules, we can set up a few functions to optimize the PnL. Let X(x) denote the function for research, Y(y) for scale, Z(z) for speed. Under the rules, we can write:
@@ -64,13 +64,13 @@ their z values, and it turned out z=37 would be able to give us a balanced betwe
 Subsequently, it gives x=16, y=47. We used up to 100% budget because the pnl formula implies every 1% used will increase the pnl by at least 500. Eventually, it turns out a pnl of 204,355, which is pretty decent.
 
 ## Round 3
-### Algorithmic trading 
+### Algorithmic Trading 
 
 ### Manual Trading
 Let's call the lowest bid b1 and the highest bid b2. Given that all products will be sold at price=920 next day, our team's strategy was to maximize the number of trades. Meanwhile, simple calculation shows that the penalty of low b2 is harsh. Therefore, we adjusted the simulation from round 2 and slightly increased the simluated value, leading us to set b2=876 (one extra dollar guarantees the trade to succeed). Then, we can use the information that the distribution of the bids is uniformly distributed at increments of 5 between 670 and 920. This helps use to determine b1. The expected bid price is 795. Since our b2 is relatively high, we adjusted b1 to 791. Eventually, it turned out that the average b2 among all teams is 859, so our guess was not too bad. This also led our ranking for the manual round to 145th. 
 
 ## Round 4
-### Algorithmic trading 
+### Algorithmic Trading 
 
 
 ### Manual Trading
@@ -81,7 +81,7 @@ To control risk, we added targeted hedges instead of fully hedging every exposur
 Final portfolio: buy 500 `AC_45_KO`, sell 50 `AC_40_BP`, sell 50 `AC_50_CO`, buy 45 `AC_45_P`, buy 30 `AC_50_C`, buy 40 `AC_50_C_2`, and buy 50 `AC_50_P_2`. This portolio ended up with roughly 44.6k, (manual) round ranking 450. 
 
 ## Round 5
-### Algorithmic trading 
+### Algorithmic Trading 
 Our final algorithm used a hybrid trading framework that combined directional alpha, relative-value signals, trend following, and risk controls. Instead of applying one universal model to every product, we separated products into different strategy types based on their historical behavior. Products with clear directional drift were traded with high-conviction static or semi-static positions, while products with more stable relationships were handled using relative-value or pair-trading logic. For noisier products, we either reduced exposure or avoided trading them entirely unless there was a clear standalone signal. However, the result turned out to be a bit overfitting, because the signals are less responsive, leading to slower orders when the regime changed. Also, due to time constraint, we were not able to completely fix this issue, and the final result was lower than our expectation. 
 
 
