@@ -31,8 +31,7 @@ V = \min\left\lbrace 30k + q,\ 40k \right\rbrace =
 \end{cases}
 $$
 
-Then, we can optimize the price q by buying q=9999 at P=30 or q=4999 at P=28, because it will result in the order of bid price P=28, volume=40k. To optimize q, we can just buy q=9999 at P=30.
-Same strategy can be applied to Ember Mushroom even though the order book is slightly more complicated. In this way, it turns out to be a math problem with a correct answer, and we also get full pnl for this.
+Then, we can optimize the price q by buying q=9999 at P=30 or q=4999 at P=28, because it will result in the order of bid price P=28, volume=40k. To optimize q, we can just buy q=9999 at P=30. Same strategy can be applied to Ember Mushroom even though the order book is slightly more complicated (we bought q=19999 ember mushrooms at price=20). In this way, it turns out to be a math problem with a correct answer, and we also get full pnl for this.
 
 ## Round 2
 ### Algorithmic trading 
