@@ -67,7 +67,7 @@ Subsequently, it gives x=16, y=47. We used up to 100% budget because the pnl for
 ### Algorithmic Trading 
 
 ### Manual Trading
-Let's call the lowest bid b1 and the highest bid b2. Given that all products will be sold at price=920 next day, our team's strategy was to maximize the number of trades. Meanwhile, simple calculation shows that the penalty of low b2 is harsh. Therefore, we adjusted the simulation from round 2 and slightly increased the simluated value, leading us to set b2=876 (one extra dollar guarantees the trade to succeed). Then, we can use the information that the distribution of the bids is uniformly distributed at increments of 5 between 670 and 920. This helps use to determine b1. The expected bid price is 795. Since our b2 is relatively high, we adjusted b1 to 791. Eventually, it turned out that the average b2 among all teams is 859, so our guess was not too bad. This also led our ranking for the manual round to 145th. 
+Let's call the lowest bid b1 and the highest bid b2. Given that all products will be sold at price=920 next day, our team's strategy was to maximize the number of trades. Meanwhile, simple calculation shows that the penalty of low b2 is harsh. Therefore, we adjusted the simulation from round 2 and slightly increased the simluated value, leading us to set b2=876 (one extra dollar guarantees the trade to succeed). Then, we can use the information that the distribution of the bids is uniformly distributed at increments of 5 between 670 and 920. This helps use to determine b1. The expected bid price is 795. Since our b2 is relatively high, we adjusted b1 to 791. Eventually, it turned out that the average b2 among all teams is 859, so our guess was not too bad. 
 
 ## Round 4
 ### Algorithmic Trading 
@@ -100,4 +100,4 @@ In this round, we just read the news and make best possible decisions we can mak
 | Pyroflex cells       |      Sell |        10% |
 | Ashes of the Phoenix |      Sell |         6% |
 
-We only used up to 85% of the budget because the fee does not grow linearly. It turned out a total fee of 99.1k and a pnl around 51.5k (slightly worse than our expectation), and the final manual round ranking was about 1000.
+We only used up to 85% of the budget because the fee does not grow linearly. It turned out a total fee of 99.1k and a pnl around 51.5k (slightly worse than our expectation), most likely because of some misinterpretation in the news letter. 
