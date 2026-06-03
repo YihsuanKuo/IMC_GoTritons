@@ -83,6 +83,8 @@ Final portfolio: buy 500 `AC_45_KO`, sell 50 `AC_40_BP`, sell 50 `AC_50_CO`, buy
 
 ## Round 5
 ### Algorithmic trading 
+Our final algorithm used a hybrid trading framework that combined directional alpha, relative-value signals, trend following, and risk controls. Instead of applying one universal model to every product, we separated products into different strategy types based on their historical behavior. Products with clear directional drift were traded with high-conviction static or semi-static positions, while products with more stable relationships were handled using relative-value or pair-trading logic. For noisier products, we either reduced exposure or avoided trading them entirely unless there was a clear standalone signal. However, the result turned out to be a bit overfitting, because the signals are less responsive, leading to slower orders when the regime changed. Also, due to time constraint, we were not able to completely fix this issue, and the final result was lower than our expectation. 
+
 
 ### Manual Trading
 In this round, we just read the news and make best possible decisions we can make. The following table is our portfolio:
